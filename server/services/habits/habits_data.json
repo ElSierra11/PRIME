@@ -1,0 +1,47 @@
+{
+  "water": {
+    "goalMl": 2500,
+    "currentMl": 0,
+    "glassMl": 250,
+    "lastDrinkTime": "2026-10-03T03:07:46.915Z"
+  },
+  "sleep": {
+    "targetBedtime": "22:00",
+    "targetWakeup": "06:30",
+    "alarmActive": false,
+    "naggingCount": 0,
+    "confirmedAsleep": true
+  },
+  "chores": [
+    {
+      "id": "ch-1",
+      "text": "Entrenamiento Prime (60m)",
+      "done": false,
+      "category": "gym"
+    },
+    {
+      "id": "ch-2",
+      "text": "Bloque Outlier (3 a 4 horas)",
+      "done": false,
+      "category": "outlier"
+    },
+    {
+      "id": "ch-3",
+      "text": "Avance en Trabajo de Grado U",
+      "done": false,
+      "category": "thesis"
+    },
+    {
+      "id": "ch-4",
+      "text": "Tomar al menos 2.5L de agua",
+      "done": false,
+      "category": "health"
+    },
+    {
+      "id": "ch-5",
+      "text": "Desconexión de pantallas antes de las 10 PM",
+      "done": false,
+      "category": "sleep"
+    }
+  ]
+}

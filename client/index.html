@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- Favicons estándar -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Viewport con soporte de notch / safe area (iPhone X+) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Theme color dinámico según esquema de color del OS -->
+    <meta name="theme-color" content="#0f1729" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)" />
+
+    <!-- SEO básico -->
+    <meta name="description" content="PRIME OS — Dashboard de rendimiento personal: horarios, gym, Outlier, finanzas e hidratación." />
+    <meta name="keywords" content="productividad, hábitos, gym, finanzas, horarios, arbitraje" />
+
+    <!-- Open Graph (para compartir en redes) -->
+    <meta property="og:title" content="PRIME OS" />
+    <meta property="og:description" content="Dashboard de rendimiento personal para recuperar tu prime." />
+    <meta property="og:image" content="/icons/icon-512.png" />
+    <meta property="og:type" content="website" />
+
+    <!-- ─── iOS PWA / Apple ──────────────────────────────── -->
+    <!-- Permite añadir a pantalla de inicio en iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- Estilo de la barra de estado: black-translucent = transparente sobre el contenido -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Nombre que aparece bajo el ícono al instalar en iOS -->
+    <meta name="apple-mobile-web-app-title" content="PRIME OS" />
+    <!-- Ícono para iOS (no usa el manifest, requiere este tag específico) -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
+    <!-- ─── Microsoft Tiles (Windows PWA) ─────────────────── -->
+    <meta name="msapplication-TileImage" content="/icons/icon-192.png" />
+    <meta name="msapplication-TileColor" content="#0f1729" />
+
+    <title>PRIME OS - Dashboard de Rendimiento</title>
+
+    <!-- Inline script: aplica tema ANTES de que React hidrate para evitar flash -->
+    <script>
+      (function() {
+        try {
+          var stored = localStorage.getItem('prime_theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (stored === 'dark' || (!stored && prefersDark) || (stored === 'system' && prefersDark)) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Splash Screen Styles -->
+    <style>
+      #splash{--sp-bg:#f1f5f9;--sp-fg:#0f172a;--sp-muted:#475569;--sp-track:rgba(15,23,42,.1);position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:var(--sp-bg);color:var(--sp-fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;transition:opacity .22s ease,visibility .22s}
+      html.dark #splash{--sp-bg:#070b14;--sp-fg:#f8fafc;--sp-muted:#94a3b8;--sp-track:rgba(255,255,255,.1)}
+      #splash.out{opacity:0;visibility:hidden;pointer-events:none}
+      .sp-glow{position:absolute;width:60vmin;height:60vmin;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.28),transparent 65%);filter:blur(30px);animation:sp-breathe 2.4s ease-in-out infinite alternate}
+      .sp-center{position:relative;display:grid;justify-items:center;gap:14px;text-align:center}
+      .sp-title{margin:0;font-size:20px;font-weight:800;letter-spacing:.14em}
+      .sp-title span{font-size:11px;padding:2px 6px;border-radius:6px;background:rgba(56,189,248,.18);color:#0284c7;letter-spacing:.08em;vertical-align:middle}
+      html.dark .sp-title span{color:#38bdf8}
+      .sp-msg{margin:0;font-size:13px;color:var(--sp-muted);min-height:1.2em}
+      #splash .pl{--pl-size:112px;animation:sp-float 2.4s ease-in-out infinite alternate}
+
+      .pl{width:var(--pl-size,120px);height:var(--pl-size,120px);display:block;transition:transform .2s ease-out;cursor:default}
+      .pl-svg{width:100%;height:100%;overflow:visible}
+      .pl-track{fill:none;stroke:var(--sp-track,rgba(148,163,184,.25));stroke-width:3}
+      .pl-ring{fill:none;stroke:url(#plr);stroke-width:3.5;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:calc((100 - var(--p,74)) * 1px);transform:rotate(-90deg);transform-origin:60px 60px;transition:stroke-dashoffset .2s ease}
+      .pl-badge{fill:url(#plg);transform-origin:60px 60px}
+      .pl-p{fill:none;stroke:#fff;stroke-width:9;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:100;stroke-dashoffset:0}
+      .pl-dot{fill:#22c55e}
+      .pl-pulse{fill:#22c55e;opacity:0;transform-origin:94px 26px}
+      .pl.run .pl-badge{animation:pl-pop .4s cubic-bezier(.34,1.56,.64,1) both}
+      .pl.run .pl-p{animation:pl-draw .6s .15s ease-out both}
+      .pl.run .pl-ring{animation:pl-ringin .6s .08s ease-out both}
+      .pl.run .pl-pulse{animation:pl-ping 1.8s 1s ease-out infinite}
+      .pl.interactive{cursor:pointer}
+      .pl.interactive:hover .pl-spin{animation:pl-spin 1.6s linear infinite}
+      #splash.fast .pl.run .pl-badge{animation-duration:.2s}
+      #splash.fast .pl.run .pl-p{animation-duration:.25s;animation-delay:0s}
+      #splash.fast .sp-msg{visibility:hidden}
+      @keyframes pl-pop{from{transform:scale(.6);opacity:0}}
+      @keyframes pl-draw{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
+      @keyframes pl-ringin{from{stroke-dashoffset:100}}
+      @keyframes pl-ping{0%{transform:scale(1);opacity:.55}100%{transform:scale(2.6);opacity:0}}
+      @keyframes pl-spin{to{transform:rotate(360deg)}}
+      @keyframes sp-breathe{to{transform:scale(1.2);opacity:.7}}
+      @keyframes sp-float{to{transform:translateY(-4px)}}
+      @media (prefers-reduced-motion:reduce){.pl *,#splash *,#splash .pl{animation:none!important}}
+    </style>
+  </head>
+  <body>
+    <!-- Splash Screen SVG Definitions -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+      <linearGradient id="plg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#0369a1"/></linearGradient>
+      <linearGradient id="plr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#34d399"/></linearGradient>
+    </defs></svg>
+
+    <!-- Splash Screen Element -->
+    <div id="splash" role="status" aria-live="polite" aria-label="Cargando PRIME OS">
+      <div class="sp-glow"></div>
+      <div class="sp-center">
+        <div class="pl run"><svg class="pl-svg" viewBox="0 0 120 120" aria-hidden="true">
+          <g class="pl-spin" style="transform-origin:60px 60px"><circle class="pl-track" cx="60" cy="60" r="56"/><circle class="pl-ring" cx="60" cy="60" r="56" pathLength="100"/></g>
+          <rect class="pl-badge" x="18" y="18" width="84" height="84" rx="24"/>
+          <path class="pl-p" pathLength="100" d="M47 82V40H63a13 13 0 0 1 0 26H47"/>
+          <circle class="pl-pulse" cx="94" cy="26" r="6.5"/><circle class="pl-dot" cx="94" cy="26" r="6.5"/>
+        </svg></div>
+        <p class="sp-title">PRIME <span>OS</span></p>
+        <p class="sp-msg" id="sp-msg">Cargando tu Prime…</p>
+      </div>
+    </div>
+
+    <script>
+    /* Splash: se muestra antes de que cargue React. Tu app avisa con window.primeSplashDone() */
+    (function(){
+      var KEY='prime-splash-seen', MAX=4000;
+      var MSGS=['Cargando tu Prime…','Sincronizando horario…','Calculando tus ventanas libres…','Casi listo…'];
+      var timers=[];
+      function stopAll(){timers.forEach(function(t){clearTimeout(t);clearInterval(t)});timers=[]}
+      function start(force){
+        var el=document.getElementById('splash'); if(!el) return;
+        stopAll(); el.classList.remove('out','fast');
+        var fast=!force && sessionStorage.getItem(KEY)==='1';
+        if(fast) el.classList.add('fast');
+        var pl=el.querySelector('.pl'); pl.classList.remove('run'); void pl.offsetWidth; pl.classList.add('run');
+        var msg=document.getElementById('sp-msg'), t0=Date.now(), min=fast?120:380, p=0, i=0, ready=false, done=false;
+        function setP(v){p=v;el.style.setProperty('--p',v)}
+        setP(0); msg.textContent=MSGS[0];
+        timers.push(setInterval(function(){ if(!ready) setP(p+(96-p)*0.22) },40));
+        timers.push(setInterval(function(){ if(!ready){ i=(i+1)%(MSGS.length-1); msg.textContent=MSGS[i] } },400));
+        function finish(){
+          if(done) return; done=true; stopAll();
+          msg.textContent='¡Listo!'; setP(100);
+          timers.push(setTimeout(function(){
+            el.classList.add('out'); sessionStorage.setItem(KEY,'1');
+            if(!el.hasAttribute('data-keep')) timers.push(setTimeout(function(){ el.remove() },220));
+          },80));
+        }
+        window.primeSplashDone=function(){ if(ready) return; ready=true; timers.push(setTimeout(finish,Math.max(0,min-(Date.now()-t0)))) };
+        timers.push(setTimeout(window.primeSplashDone,MAX));
+      }
+      window.primeSplashStart=start;
+      start(false);
+    })();
+    </script>
+    <script>
+    // Auto-recover from stale chunks: if any old cached chunk throws or fails to load, evict cache & reload
+    window.addEventListener('error', function(e) {
+      var msg = (e && e.message) || '';
+      if (msg.indexOf('addToast is not defined') !== -1 || msg.indexOf('dynamically imported module') !== -1 || msg.indexOf('Loading chunk') !== -1) {
+        if (!sessionStorage.getItem('prime_sw_cleared')) {
+          sessionStorage.setItem('prime_sw_cleared', '1');
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              for (var i = 0; i < regs.length; i++) regs[i].unregister();
+            });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(keys) {
+              for (var i = 0; i < keys.length; i++) caches.delete(keys[i]);
+            });
+          }
+          setTimeout(function() { window.location.reload(); }, 100);
+        }
+      }
+    });
+    </script>
+
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

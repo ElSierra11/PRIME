@@ -1,0 +1,16 @@
+{
+  "name": "prime-os",
+  "version": "2.0.0",
+  "description": "PRIME OS: React + Tailwind + Microservicios Node.js para Alejo Sierra (alejosierra656@gmail.com)",
+  "main": "server/gateway.js",
+  "scripts": {
+    "build": "npm --prefix client install && npm --prefix client run build",
+    "start": "node server/gateway.js",
+    "dev:gateway": "node server/gateway.js",
+    "dev:client": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build"
+  },
+  "keywords": ["prime", "react", "tailwind", "microservices", "fitness", "outlier", "arbitraje"],
+  "author": "Alejo Sierra <alejosierra656@gmail.com>",
+  "license": "MIT"
+}

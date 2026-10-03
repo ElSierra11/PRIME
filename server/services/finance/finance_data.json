@@ -1,0 +1,25 @@
+{
+  "monthlyGoalCOP": 2200000,
+  "currentSavedCOP": 1250000,
+  "exchangeRateCOPPerUSD": 4000,
+  "savingsRecords": [
+    {
+      "id": "sav-1790988249384",
+      "title": "Ahorrado en vez de gastar en: Hamburguesa especial",
+      "amountCOP": 55000,
+      "date": "Hoy"
+    },
+    {
+      "id": "sav-1",
+      "title": "Freno en comida rápida en la U",
+      "amountCOP": 35000,
+      "date": "Ayer"
+    },
+    {
+      "id": "sav-2",
+      "title": "Ahorro de pago partido arbitraje fin de semana",
+      "amountCOP": 90000,
+      "date": "Fin de semana"
+    }
+  ]
+}

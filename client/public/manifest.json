@@ -1,0 +1,65 @@
+{
+  "name": "PRIME OS - Rendimiento & Enfoque",
+  "short_name": "PRIME OS",
+  "description": "Sistema de optimización personal para Alejo Sierra: Horarios, Gym, Outlier, Arbitraje COARC y Finanzas.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#070c18",
+  "theme_color": "#070c18",
+  "lang": "es",
+  "categories": ["productivity", "health", "finance", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard Prime",
+      "short_name": "Inicio",
+      "url": "/?tab=dashboard",
+      "description": "Tu resumen diario de rendimiento y hábitos"
+    },
+    {
+      "name": "Mi Horario Semanal",
+      "short_name": "Horario",
+      "url": "/?tab=schedule",
+      "description": "Ver clases, tesis y arbitraje COARC"
+    },
+    {
+      "name": "Outlier Tracker",
+      "short_name": "Outlier",
+      "url": "/?tab=outlier",
+      "description": "Cronómetro y registro de horas remuneradas"
+    },
+    {
+      "name": "Rutinas Gym & Árbitro",
+      "short_name": "Gym",
+      "url": "/?tab=workout",
+      "description": "Entrenamientos de fuerza y preparación física"
+    },
+    {
+      "name": "Filtro de Ahorro",
+      "short_name": "Ahorro",
+      "url": "/?tab=finance",
+      "description": "Control de gastos y meta mensual $2M COP"
+    }
+  ]
+}
