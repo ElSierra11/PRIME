@@ -158,7 +158,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // 4. Habits & Duolingo Sleep Alarm Routes
-    if (pathname === '/api/habits/status' && req.method === 'GET') {
+    if ((pathname === '/api/habits/status' || pathname === '/api/habits/overview') && req.method === 'GET') {
       const result = await habitsService.getHabitsStatus();
       return sendResponse(res, 200, result);
     }

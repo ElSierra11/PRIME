@@ -64,7 +64,7 @@ function AppContent({ activeTab, setActiveTab }) {
   } = useNotifications({
     isSleepConfirmed: !!habitsData?.sleep?.confirmedAsleep,
     currentWaterMl: habitsData?.water?.currentMl || 0,
-    waterTargetMl: habitsData?.water?.targetMl || 2500,
+    waterTargetMl: habitsData?.water?.goalMl || habitsData?.water?.targetMl || 2500,
     addToast
   });
 
@@ -200,25 +200,11 @@ function AppContent({ activeTab, setActiveTab }) {
   };
 
   const handleResetWater = async () => {
-    const prevWater = habitsData?.water?.currentMl || 0;
     try {
       const res = await fetch('/api/habits/water/reset', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setHabitsData(data);
-        // Toast con Deshacer destructivo
-        toast.undo({
-          title: 'Agua reiniciada a 0 ml',
-          message: 'Se reinició tu contador diario de hidratación.',
-          category: 'water',
-          onUndo: async () => {
-            await handleDrinkWater(prevWater);
-            toast.success({
-              title: 'Hidratación restablecida',
-              message: `Recuperados tus ${prevWater} ml de agua.`
-            });
-          }
-        });
       }
     } catch (e) {
       console.error(e);

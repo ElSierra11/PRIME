@@ -24,7 +24,8 @@ export default function DashboardTab({
   onToggleChore,
   scheduleDayData,
   outlierStats,
-  setActiveTab
+  setActiveTab,
+  addToast
 }) {
   const { toast } = useToast();
   const primeSlot = scheduleDayData?.freeSlots?.find((s) => s.duration >= 60 && s.duration <= 120) || scheduleDayData?.freeSlots?.[0];
