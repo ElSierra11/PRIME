@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const supabase = require('../supabase');
 
 const DATA_FILE = path.join(__dirname, 'outlier_data.json');
 
@@ -41,6 +42,19 @@ class OutlierService {
   }
 
   async getStats() {
+    if (supabase.isConfigured()) {
+      const records = await supabase.select('outlier_sessions', 'order=date.desc,created_at.desc');
+      if (records && records.length > 0) {
+        this.state.sessions = records.map(r => ({
+          id: r.id,
+          date: r.date,
+          hours: parseFloat(r.hours),
+          earnedUSD: parseFloat(r.earned_usd),
+          notes: r.notes || ''
+        }));
+      }
+    }
+
     const totalWeeklyHours = this.state.sessions.reduce((acc, s) => acc + s.hours, 0);
     const totalWeeklyUSD = this.state.sessions.reduce((acc, s) => acc + s.earnedUSD, 0);
     const totalWeeklyCOP = totalWeeklyUSD * 4000;
@@ -69,6 +83,18 @@ class OutlierService {
     };
     this.state.sessions.unshift(session);
     this.saveData();
+
+    if (supabase.isConfigured()) {
+      await supabase.insert('outlier_sessions', {
+        id: session.id,
+        date: session.date,
+        hours: session.hours,
+        rate_usd: this.state.ratePerHourUSD,
+        earned_usd: session.earnedUSD,
+        notes: session.notes
+      });
+    }
+
     return { success: true, session };
   }
 

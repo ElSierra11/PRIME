@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const supabase = require('../supabase');
 
 const DATA_FILE = path.join(__dirname, 'finance_data.json');
 
@@ -41,6 +42,24 @@ class FinanceService {
   }
 
   async getFinanceOverview(ratePerHourUSD = 15) {
+    if (supabase.isConfigured()) {
+      const goals = await supabase.select('finance_goals', 'id=eq.main');
+      if (goals && goals.length > 0) {
+        this.state.monthlyGoalCOP = parseFloat(goals[0].monthly_goal_cop);
+        this.state.currentSavedCOP = parseFloat(goals[0].current_saved_cop);
+        this.state.exchangeRateCOPPerUSD = parseFloat(goals[0].exchange_rate_cop_usd || 4000);
+      }
+      const savings = await supabase.select('finance_savings', 'order=created_at.desc');
+      if (savings && savings.length > 0) {
+        this.state.savingsRecords = savings.map(s => ({
+          id: s.id,
+          title: s.title,
+          amountCOP: parseFloat(s.amount_cop),
+          date: s.date_label || 'Hoy'
+        }));
+      }
+    }
+
     const percent = Math.min(100, Math.round((this.state.currentSavedCOP / this.state.monthlyGoalCOP) * 100));
     return {
       success: true,
@@ -92,6 +111,22 @@ class FinanceService {
     };
     this.state.savingsRecords.unshift(record);
     this.saveData();
+
+    if (supabase.isConfigured()) {
+      await supabase.insert('finance_savings', {
+        id: record.id,
+        title: record.title,
+        amount_cop: record.amountCOP,
+        date_label: record.date
+      });
+      await supabase.upsert('finance_goals', {
+        id: 'main',
+        monthly_goal_cop: this.state.monthlyGoalCOP,
+        current_saved_cop: this.state.currentSavedCOP,
+        exchange_rate_cop_usd: this.state.exchangeRateCOPPerUSD
+      });
+    }
+
     return { success: true, record, currentSavedCOP: this.state.currentSavedCOP };
   }
 
@@ -106,6 +141,16 @@ class FinanceService {
       this.state.exchangeRateCOPPerUSD = Math.max(1, parseFloat(exchangeRateCOPPerUSD));
     }
     this.saveData();
+
+    if (supabase.isConfigured()) {
+      await supabase.upsert('finance_goals', {
+        id: 'main',
+        monthly_goal_cop: this.state.monthlyGoalCOP,
+        current_saved_cop: this.state.currentSavedCOP,
+        exchange_rate_cop_usd: this.state.exchangeRateCOPPerUSD
+      });
+    }
+
     return {
       success: true,
       currentSavedCOP: this.state.currentSavedCOP,
@@ -118,6 +163,11 @@ class FinanceService {
     const prevLen = this.state.savingsRecords.length;
     this.state.savingsRecords = this.state.savingsRecords.filter(r => r.id !== id);
     this.saveData();
+
+    if (supabase.isConfigured()) {
+      await supabase.delete('finance_savings', 'id', id);
+    }
+
     return {
       success: true,
       deleted: prevLen !== this.state.savingsRecords.length,

@@ -4,6 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const supabase = require('../supabase');
 
 const DATA_FILE = path.join(__dirname, 'habits_data.json');
 
@@ -53,6 +54,19 @@ class HabitsService {
   }
 
   async getHabitsStatus() {
+    if (supabase.isConfigured()) {
+      const records = await supabase.select('habits_daily', 'id=eq.today');
+      if (records && records.length > 0) {
+        const r = records[0];
+        this.state.water.currentMl = r.water_current_ml ?? this.state.water.currentMl;
+        this.state.water.goalMl = r.water_goal_ml ?? this.state.water.goalMl;
+        this.state.sleep.confirmedAsleep = Boolean(r.sleep_confirmed);
+        if (Array.isArray(r.chores) && r.chores.length > 0) {
+          this.state.chores = r.chores;
+        }
+      }
+    }
+
     const totalChores = this.state.chores.length;
     const completedChores = this.state.chores.filter(c => c.done).length;
     const waterPercent = Math.min(100, Math.round((this.state.water.currentMl / this.state.water.goalMl) * 100));
@@ -77,16 +91,31 @@ class HabitsService {
     };
   }
 
+  async syncToSupabase() {
+    if (supabase.isConfigured()) {
+      await supabase.upsert('habits_daily', {
+        id: 'today',
+        water_current_ml: this.state.water.currentMl,
+        water_goal_ml: this.state.water.goalMl,
+        sleep_confirmed: this.state.sleep.confirmedAsleep,
+        sleep_confirmed_at: this.state.sleep.confirmedAsleep ? new Date().toISOString() : null,
+        chores: this.state.chores
+      });
+    }
+  }
+
   async logWater(amountMl = 250) {
     this.state.water.currentMl += amountMl;
     this.state.water.lastDrinkTime = new Date().toISOString();
     this.saveData();
+    await this.syncToSupabase();
     return this.getHabitsStatus();
   }
 
   async resetWater() {
     this.state.water.currentMl = 0;
     this.saveData();
+    await this.syncToSupabase();
     return this.getHabitsStatus();
   }
 
@@ -95,6 +124,7 @@ class HabitsService {
     if (chore) {
       chore.done = !chore.done;
       this.saveData();
+      await this.syncToSupabase();
     }
     return this.getHabitsStatus();
   }
@@ -106,6 +136,7 @@ class HabitsService {
       this.state.sleep.confirmedAsleep = false;
     }
     this.saveData();
+    await this.syncToSupabase();
     return { success: true, sleep: this.state.sleep };
   }
 
@@ -114,6 +145,7 @@ class HabitsService {
     this.state.sleep.confirmedAsleep = true;
     this.state.sleep.naggingCount = 0;
     this.saveData();
+    await this.syncToSupabase();
     return { success: true, sleep: this.state.sleep };
   }
 }

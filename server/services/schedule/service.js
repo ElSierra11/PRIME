@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const supabase = require('../supabase');
 
 const DATA_FILE = path.join(__dirname, 'schedule_data.json');
 
@@ -96,6 +97,20 @@ class ScheduleService {
   }
 
   async getAllEvents() {
+    if (supabase.isConfigured()) {
+      const records = await supabase.select('schedule_events', 'order=day.asc,start_time.asc');
+      if (records && records.length > 0) {
+        this.events = records.map(r => ({
+          id: r.id,
+          day: r.day,
+          title: r.title,
+          category: r.category,
+          start: r.start_time,
+          end: r.end_time,
+          notes: r.notes || ''
+        }));
+      }
+    }
     return { success: true, events: this.events };
   }
 
@@ -189,12 +204,30 @@ class ScheduleService {
     };
     this.events.push(newEvent);
     this.saveData();
+
+    if (supabase.isConfigured()) {
+      await supabase.insert('schedule_events', {
+        id: newEvent.id,
+        day: newEvent.day,
+        title: newEvent.title,
+        category: newEvent.category,
+        start_time: newEvent.start,
+        end_time: newEvent.end,
+        notes: newEvent.notes
+      });
+    }
+
     return { success: true, event: newEvent };
   }
 
   async deleteEvent(id) {
     this.events = this.events.filter(e => e.id !== id);
     this.saveData();
+
+    if (supabase.isConfigured()) {
+      await supabase.delete('schedule_events', 'id', id);
+    }
+
     return { success: true, deletedId: id };
   }
 
