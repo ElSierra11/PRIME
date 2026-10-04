@@ -11,6 +11,7 @@ const DATA_FILE = path.join(__dirname, 'habits_data.json');
 class HabitsService {
   constructor() {
     this.state = this.loadData();
+    this.initialSupabaseLoaded = false;
   }
 
   loadData() {
@@ -24,7 +25,7 @@ class HabitsService {
     return {
       water: {
         goalMl: 2500,
-        currentMl: 1250,
+        currentMl: 0,
         glassMl: 250,
         lastDrinkTime: new Date().toISOString()
       },
@@ -53,23 +54,44 @@ class HabitsService {
     }
   }
 
-  async getHabitsStatus() {
-    if (supabase.isConfigured()) {
-      const records = await supabase.select('habits_daily', 'id=eq.today');
-      if (records && records.length > 0) {
-        const r = records[0];
-        this.state.water.currentMl = r.water_current_ml ?? this.state.water.currentMl;
-        this.state.water.goalMl = r.water_goal_ml ?? this.state.water.goalMl;
-        this.state.sleep.confirmedAsleep = Boolean(r.sleep_confirmed);
-        if (Array.isArray(r.chores) && r.chores.length > 0) {
-          this.state.chores = r.chores;
+  async getHabitsStatus(skipSupabase = false) {
+    if (!skipSupabase && supabase.isConfigured() && !this.initialSupabaseLoaded) {
+      try {
+        const records = await supabase.select('habits_daily', 'id=eq.today');
+        if (records && records.length > 0) {
+          const r = records[0];
+          if (typeof r.water_current_ml === 'number') {
+            this.state.water.currentMl = r.water_current_ml;
+          }
+          if (typeof r.water_goal_ml === 'number') {
+            this.state.water.goalMl = r.water_goal_ml;
+          }
+          if (r.sleep_confirmed !== undefined) {
+            this.state.sleep.confirmedAsleep = Boolean(r.sleep_confirmed);
+          }
+          if (Array.isArray(r.chores) && r.chores.length > 0) {
+            this.state.chores = r.chores;
+          }
         }
+      } catch (e) {
+        console.error('Error cargando hábitos desde Supabase:', e.message);
       }
+      this.initialSupabaseLoaded = true;
     }
 
-    const totalChores = this.state.chores.length;
+    const currentMl = Math.max(0, Number(this.state.water.currentMl) || 0);
+    const goalMl = Math.max(100, Number(this.state.water.goalMl) || 2500);
+    const glassMl = Math.max(50, Number(this.state.water.glassMl) || 250);
+
+    // Auto-verify chore ch-4 state consistency
+    const waterChore = this.state.chores.find(c => c.id === 'ch-4');
+    if (waterChore && currentMl >= goalMl && !waterChore.done) {
+      waterChore.done = true;
+    }
+
+    const totalChores = this.state.chores.length || 1;
     const completedChores = this.state.chores.filter(c => c.done).length;
-    const waterPercent = Math.min(100, Math.round((this.state.water.currentMl / this.state.water.goalMl) * 100));
+    const waterPercent = Math.min(100, Math.round((currentMl / goalMl) * 100));
 
     // Dynamic Prime Score calculation
     let primeScore = 40;
@@ -81,9 +103,12 @@ class HabitsService {
       success: true,
       water: {
         ...this.state.water,
+        currentMl,
+        goalMl,
+        glassMl,
         percent: waterPercent,
-        glassesDrank: Math.floor(this.state.water.currentMl / this.state.water.glassMl),
-        glassesTotal: Math.floor(this.state.water.goalMl / this.state.water.glassMl)
+        glassesDrank: Math.floor(currentMl / glassMl),
+        glassesTotal: Math.floor(goalMl / glassMl)
       },
       sleep: this.state.sleep,
       chores: this.state.chores,
@@ -93,40 +118,63 @@ class HabitsService {
 
   async syncToSupabase() {
     if (supabase.isConfigured()) {
-      await supabase.upsert('habits_daily', {
-        id: 'today',
-        water_current_ml: this.state.water.currentMl,
-        water_goal_ml: this.state.water.goalMl,
-        sleep_confirmed: this.state.sleep.confirmedAsleep,
-        sleep_confirmed_at: this.state.sleep.confirmedAsleep ? new Date().toISOString() : null,
-        chores: this.state.chores
-      });
+      try {
+        await supabase.upsert('habits_daily', {
+          id: 'today',
+          water_current_ml: Math.max(0, Number(this.state.water.currentMl) || 0),
+          water_goal_ml: Math.max(100, Number(this.state.water.goalMl) || 2500),
+          sleep_confirmed: Boolean(this.state.sleep.confirmedAsleep),
+          sleep_confirmed_at: this.state.sleep.confirmedAsleep ? new Date().toISOString() : null,
+          chores: this.state.chores
+        });
+      } catch (err) {
+        console.error('Error sincronizando hábitos a Supabase:', err.message);
+      }
     }
   }
 
   async logWater(amountMl = 250) {
-    this.state.water.currentMl += amountMl;
+    const amount = Number(amountMl) || 250;
+    const cur = Math.max(0, Number(this.state.water.currentMl) || 0);
+    this.state.water.currentMl = cur + amount;
     this.state.water.lastDrinkTime = new Date().toISOString();
+
+    // Auto-complete chore ch-4 if goal reached
+    const waterChore = this.state.chores.find(c => c.id === 'ch-4');
+    if (waterChore && this.state.water.currentMl >= this.state.water.goalMl) {
+      waterChore.done = true;
+    }
+
     this.saveData();
-    await this.syncToSupabase();
-    return this.getHabitsStatus();
+    this.syncToSupabase().catch(() => {});
+    return this.getHabitsStatus(true);
   }
 
   async resetWater() {
     this.state.water.currentMl = 0;
+    const waterChore = this.state.chores.find(c => c.id === 'ch-4');
+    if (waterChore) {
+      waterChore.done = false;
+    }
     this.saveData();
-    await this.syncToSupabase();
-    return this.getHabitsStatus();
+    this.syncToSupabase().catch(() => {});
+    return this.getHabitsStatus(true);
   }
 
   async toggleChore(choreId) {
     const chore = this.state.chores.find(c => c.id === choreId);
     if (chore) {
       chore.done = !chore.done;
+      // If manually marking water chore as done, ensure currentMl reaches goal
+      if (chore.id === 'ch-4') {
+        if (chore.done && (Number(this.state.water.currentMl) || 0) < this.state.water.goalMl) {
+          this.state.water.currentMl = this.state.water.goalMl;
+        }
+      }
       this.saveData();
-      await this.syncToSupabase();
+      this.syncToSupabase().catch(() => {});
     }
-    return this.getHabitsStatus();
+    return this.getHabitsStatus(true);
   }
 
   async triggerSleepAlarm(isActive = true) {
@@ -136,7 +184,7 @@ class HabitsService {
       this.state.sleep.confirmedAsleep = false;
     }
     this.saveData();
-    await this.syncToSupabase();
+    this.syncToSupabase().catch(() => {});
     return { success: true, sleep: this.state.sleep };
   }
 
@@ -145,7 +193,7 @@ class HabitsService {
     this.state.sleep.confirmedAsleep = true;
     this.state.sleep.naggingCount = 0;
     this.saveData();
-    await this.syncToSupabase();
+    this.syncToSupabase().catch(() => {});
     return { success: true, sleep: this.state.sleep };
   }
 }

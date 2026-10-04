@@ -63,6 +63,13 @@ export default function OutlierTab({ outlierStats, onLogSession, onUpdateRate })
   const [celebrated4h, setCelebrated4h] = useState(false);
   const [showShiftsLog, setShowShiftsLog] = useState(false);
 
+  // Sync rateInput when outlierStats arrives from server
+  useEffect(() => {
+    if (outlierStats?.ratePerHourUSD) {
+      setRateInput(outlierStats.ratePerHourUSD);
+    }
+  }, [outlierStats?.ratePerHourUSD]);
+
   const intervalRef = useRef(null);
 
   /* ─── Screen Wake Lock: pantalla encendida mientras corre el timer ── */

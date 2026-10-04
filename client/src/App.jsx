@@ -192,32 +192,101 @@ function AppContent({ activeTab, setActiveTab }) {
 
   // ── Actions for Habits (con Deshacer) ─────────────────────────
   const handleDrinkWater = async (amountMl) => {
+    const amount = Number(amountMl) || 250;
+
+    // Actualización optimista instantánea
+    setHabitsData((prev) => {
+      if (!prev) return prev;
+      const cur = Math.max(0, Number(prev.water?.currentMl) || 0);
+      const goal = Math.max(100, Number(prev.water?.goalMl) || 2500);
+      const glass = Math.max(50, Number(prev.water?.glassMl) || 250);
+      const nextMl = cur + amount;
+      const percent = Math.min(100, Math.round((nextMl / goal) * 100));
+      const updatedChores = (prev.chores || []).map((ch) =>
+        ch.id === 'ch-4' ? { ...ch, done: nextMl >= goal } : ch
+      );
+      return {
+        ...prev,
+        water: {
+          ...prev.water,
+          currentMl: nextMl,
+          percent,
+          glassesDrank: Math.floor(nextMl / glass),
+          glassesTotal: Math.floor(goal / glass)
+        },
+        chores: updatedChores
+      };
+    });
+
     try {
       const res = await fetch('/api/habits/water/drink', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amountMl })
+        body: JSON.stringify({ amountMl: amount })
       });
       const data = await res.json();
-      if (data.success) setHabitsData(data);
+      if (data && data.success) setHabitsData(data);
     } catch (e) {
-      console.error(e);
+      console.error('Error al registrar agua:', e);
     }
   };
 
   const handleResetWater = async () => {
+    // Actualización optimista a 0 ml
+    setHabitsData((prev) => {
+      if (!prev) return prev;
+      const updatedChores = (prev.chores || []).map((ch) =>
+        ch.id === 'ch-4' ? { ...ch, done: false } : ch
+      );
+      return {
+        ...prev,
+        water: {
+          ...prev.water,
+          currentMl: 0,
+          percent: 0,
+          glassesDrank: 0
+        },
+        chores: updatedChores
+      };
+    });
+
     try {
       const res = await fetch('/api/habits/water/reset', { method: 'POST' });
       const data = await res.json();
-      if (data.success) {
+      if (data && data.success) {
         setHabitsData(data);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Error al reiniciar agua:', e);
     }
   };
 
   const handleToggleChore = async (choreId) => {
+    // Actualización optimista de tareas
+    setHabitsData((prev) => {
+      if (!prev) return prev;
+      const chore = prev.chores?.find((c) => c.id === choreId);
+      if (!chore) return prev;
+      const nextDone = !chore.done;
+      let nextWater = prev.water;
+
+      // Si marca tarea de agua manual a realizada, asegura que el agua refleje la meta
+      if (choreId === 'ch-4' && nextDone && (Number(prev.water?.currentMl) || 0) < (prev.water?.goalMl || 2500)) {
+        nextWater = {
+          ...prev.water,
+          currentMl: prev.water.goalMl,
+          percent: 100,
+          glassesDrank: Math.floor(prev.water.goalMl / (prev.water.glassMl || 250))
+        };
+      }
+
+      return {
+        ...prev,
+        water: nextWater,
+        chores: prev.chores.map((c) => (c.id === choreId ? { ...c, done: nextDone } : c))
+      };
+    });
+
     try {
       const res = await fetch('/api/habits/chore/toggle', {
         method: 'POST',
@@ -225,12 +294,12 @@ function AppContent({ activeTab, setActiveTab }) {
         body: JSON.stringify({ id: choreId })
       });
       const data = await res.json();
-      if (data.success) {
+      if (data && data.success) {
         setHabitsData(data);
         sounds.playSuccessChime();
       }
     } catch (e) {
-      console.error(e);
+      console.error('Error al cambiar estado de tarea:', e);
     }
   };
 

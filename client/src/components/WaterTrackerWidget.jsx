@@ -26,11 +26,11 @@ export default function WaterTrackerWidget({ waterData, onDrink, onReset, addToa
   }, []);
 
   const handleDrink = (amount) => {
-    sounds.playWaterDropSound();
     setIsBouncing(true);
     setTimeout(() => setIsBouncing(false), 400);
 
-    const newMl = currentMl + amount;
+    const safeAmount = Number(amount) || 250;
+    const newMl = (Number(currentMl) || 0) + safeAmount;
     if (newMl >= goalMl && currentMl < goalMl) {
       haptics.waterGoal();
       toast.achievement({
@@ -40,13 +40,13 @@ export default function WaterTrackerWidget({ waterData, onDrink, onReset, addToa
       });
     } else {
       toast.reminder({
-        title: `+${amount} ml de agua registrados`,
+        title: `+${safeAmount} ml de agua registrados`,
         message: `Total: ${newMl} ml de tu meta diaria (2.5L). ¡Mantén tu energía alta!`,
         category: 'water'
       });
     }
 
-    onDrink(amount);
+    onDrink(safeAmount);
   };
 
   const handleResetWithUndo = () => {

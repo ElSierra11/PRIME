@@ -245,6 +245,8 @@ export default function WorkoutTab({ addToast: legacyAddToast } = {}) {
   const sessionProgressFraction = totalSets > 0 ? doneSets / totalSets : 0;
   const sessionDone = doneSets === totalSets && totalSets > 0;
 
+  const celebratedSessionRef = useRef({});
+
   /* ─── Screen Wake Lock: mantener pantalla encendida durante el descanso ── */
   useWakeLock(isRestRunning);
 
@@ -271,15 +273,18 @@ export default function WorkoutTab({ addToast: legacyAddToast } = {}) {
 
   /* ─── Session done celebration ── */
   useEffect(() => {
-    if (sessionDone) {
+    if (sessionDone && !celebratedSessionRef.current[activeRoutineId]) {
+      celebratedSessionRef.current[activeRoutineId] = true;
       sounds.playSuccessChime();
       toast.achievement({
         title: '¡Sesión Prime Completa!',
         message: `Terminaste las ${totalSets} series de la rutina. Tu Prime sigue vivo.`,
         category: 'workout'
       });
+    } else if (!sessionDone) {
+      celebratedSessionRef.current[activeRoutineId] = false;
     }
-  }, [sessionDone, totalSets, toast]);
+  }, [sessionDone, totalSets, activeRoutineId, toast]);
 
   /* ─── Rest timer actions ── */
   const startRest = useCallback((secs) => {
