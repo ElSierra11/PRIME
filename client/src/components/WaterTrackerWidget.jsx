@@ -192,6 +192,7 @@ export default function WaterTrackerWidget({ waterData, onDrink, onReset, addToa
 
         {previousMl !== null ? (
           <motion.button
+            key="undo-water-btn"
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.8, opacity: 0 }}
@@ -204,6 +205,7 @@ export default function WaterTrackerWidget({ waterData, onDrink, onReset, addToa
           </motion.button>
         ) : (
           <button
+            key="reset-water-btn"
             onClick={handleResetWithUndo}
             title="Reiniciar contador de agua"
             aria-label="Reiniciar contador de agua a cero"

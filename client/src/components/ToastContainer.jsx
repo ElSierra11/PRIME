@@ -114,12 +114,15 @@ function ToastItem({ toast, removeToast, confirmReminder, snoozeReminder, snooze
   useEffect(() => {
     if (isLogro && !prefersReducedMotion) {
       try {
-        confetti({
-          particleCount: 30,
-          spread: 55,
-          origin: { y: 0.8, x: 0.8 },
-          colors: ['#38bdf8', '#34d399', '#f59e0b']
-        });
+        const fn = typeof confetti === 'function' ? confetti : confetti?.default;
+        if (typeof fn === 'function') {
+          fn({
+            particleCount: 30,
+            spread: 55,
+            origin: { y: 0.8, x: 0.8 },
+            colors: ['#38bdf8', '#34d399', '#f59e0b']
+          });
+        }
       } catch (_) {}
     }
   }, [isLogro, prefersReducedMotion]);
@@ -360,7 +363,7 @@ export default function ToastContainer() {
   // Teclado: Escape cierra el toast superior más reciente
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && toasts.length > 0) {
+      if (e.key === 'Escape' && toasts?.length > 0) {
         const topToast = toasts[0];
         if (topToast && topToast.type !== 'critical') {
           removeToast(topToast.id);
@@ -371,25 +374,25 @@ export default function ToastContainer() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toasts, removeToast]);
 
+  // Posicionamiento responsivo y respetando ajustes (debe ejecutarse SIEMPRE antes de cualquier return condicional)
+  const positionClass = useMemo(() => {
+    // En móvil siempre abajo centrado por encima de la barra inferior (bottom-20)
+    // En escritorio respeta settings.position
+    const desktopPos =
+      settings?.position === 'bottom-right'
+        ? 'md:bottom-6 md:top-auto md:right-6 md:left-auto'
+        : settings?.position === 'bottom-center'
+        ? 'md:bottom-6 md:top-auto md:left-1/2 md:-translate-x-1/2 md:right-auto'
+        : 'md:top-5 md:bottom-auto md:right-6 md:left-auto'; // 'top-right' default
+
+    return `fixed bottom-20 left-4 right-4 max-w-sm mx-auto md:mx-0 md:max-w-md w-full z-50 flex flex-col gap-2.5 pointer-events-none pb-[env(safe-area-inset-bottom,0px)] ${desktopPos}`;
+  }, [settings?.position]);
+
   if (!toasts || toasts.length === 0) return null;
 
   // Máximo 3 visibles en pantalla a la vez
   const visibleToasts = toasts.slice(0, 3);
   const hiddenCount = toasts.length - visibleToasts.length;
-
-  // Posicionamiento responsivo y respetando ajustes
-  const positionClass = useMemo(() => {
-    // En móvil siempre abajo centrado por encima de la barra inferior (bottom-20)
-    // En escritorio respeta settings.position
-    const desktopPos =
-      settings.position === 'bottom-right'
-        ? 'md:bottom-6 md:top-auto md:right-6 md:left-auto'
-        : settings.position === 'bottom-center'
-        ? 'md:bottom-6 md:top-auto md:left-1/2 md:-translate-x-1/2 md:right-auto'
-        : 'md:top-5 md:bottom-auto md:right-6 md:left-auto'; // 'top-right' default
-
-    return `fixed bottom-20 left-4 right-4 max-w-sm mx-auto md:mx-0 md:max-w-md w-full z-50 flex flex-col gap-2.5 pointer-events-none pb-[env(safe-area-inset-bottom,0px)] ${desktopPos}`;
-  }, [settings.position]);
 
   return (
     <aside aria-label="Notificaciones activas de PRIME OS" className={positionClass}>
