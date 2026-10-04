@@ -17,7 +17,8 @@ import {
   Smartphone,
   MonitorCheck,
   Download,
-  MessageSquare
+  MessageSquare,
+  Shield
 } from 'lucide-react';
 import AnimatedNumber from './AnimatedNumber';
 import { haptics } from '../utils/haptics';
@@ -71,6 +72,7 @@ export default function Navbar({
     { id: 'schedule', label: 'Horario', icon: CalendarCheck2 },
     { id: 'outlier', label: 'Outlier', icon: Clock },
     { id: 'workout', label: 'Gym', icon: Dumbbell },
+    { id: 'referee', label: 'Árbitro', icon: Shield },
     { id: 'finance', label: 'Ahorro', icon: PiggyBank },
   ];
 

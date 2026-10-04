@@ -9,6 +9,7 @@ import DashboardTab from './tabs/DashboardTab';
 const ScheduleTab = lazy(() => import('./tabs/ScheduleTab'));
 const OutlierTab  = lazy(() => import('./tabs/OutlierTab'));
 const WorkoutTab  = lazy(() => import('./tabs/WorkoutTab'));
+const RefereeTab  = lazy(() => import('./tabs/RefereeTab'));
 const FinanceTab  = lazy(() => import('./tabs/FinanceTab'));
 import { sounds } from './utils/audio';
 import { useTheme } from './utils/useTheme';
@@ -21,6 +22,7 @@ const preloadMap = {
   schedule: () => import('./tabs/ScheduleTab'),
   outlier:  () => import('./tabs/OutlierTab'),
   workout:  () => import('./tabs/WorkoutTab'),
+  referee:  () => import('./tabs/RefereeTab'),
   finance:  () => import('./tabs/FinanceTab')
 };
 
@@ -559,6 +561,12 @@ function AppContent({ activeTab, setActiveTab }) {
               {activeTab === 'workout' && (
                 <Suspense fallback={<TabSkeleton />}>
                   <WorkoutTab addToast={addToast} />
+                </Suspense>
+              )}
+
+              {activeTab === 'referee' && (
+                <Suspense fallback={<TabSkeleton />}>
+                  <RefereeTab />
                 </Suspense>
               )}
 
