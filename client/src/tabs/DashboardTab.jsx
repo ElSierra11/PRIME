@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Pagination } from 'swiper/modules';
 import {
   Sparkles,
   Dumbbell,
@@ -38,6 +36,28 @@ export default function DashboardTab({
   // Live countdown to Prime Slot
   const [countdownText, setCountdownText] = useState('');
   const [isSlotSoon, setIsSlotSoon] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const carouselRef = useRef(null);
+
+  const handleCarouselScroll = (e) => {
+    const el = e.currentTarget;
+    if (!el) return;
+    const card = el.firstElementChild;
+    const cardW = card ? card.offsetWidth : el.offsetWidth * 0.86;
+    const gap = 12; // gap-3
+    const index = Math.round(el.scrollLeft / (cardW + gap));
+    setActiveSlide(Math.min(2, Math.max(0, index)));
+  };
+
+  const scrollToSlide = (idx) => {
+    if (carouselRef.current) {
+      const card = carouselRef.current.children[idx];
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+        setActiveSlide(idx);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!primeSlot) {
@@ -112,138 +132,162 @@ export default function DashboardTab({
       className="space-y-6"
     >
       {/* 1. Prime Hero Section */}
+      {/* 1. Prime Hero Section */}
       <motion.section
         variants={itemVariants}
         aria-labelledby="hero-title"
-        className="bg-surface/90 backdrop-blur-md border border-border rounded-2xl p-5 sm:p-7 shadow-xs transition-all relative overflow-hidden"
+        className="bg-surface/90 backdrop-blur-md border border-border rounded-2xl p-4 sm:p-6 lg:p-7 shadow-xs transition-all relative overflow-hidden"
       >
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-subtle text-accent text-xs font-black uppercase tracking-wider mb-3">
-              <Sparkles className="w-3.5 h-3.5" /> REGLA DE ORO DE TU PRIME
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
+          <div className="max-w-2xl min-w-0">
+            <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-accent-subtle text-accent text-[11px] sm:text-xs font-black uppercase tracking-wider mb-2 sm:mb-3">
+              <Sparkles className="w-3.5 h-3.5 shrink-0" /> REGLA DE ORO DE TU PRIME
             </div>
             
-            <h1 id="hero-title" className="text-xl sm:text-2xl md:text-3xl font-extrabold text-text tracking-tight leading-tight">
+            <h1
+              id="hero-title"
+              className="font-extrabold text-text tracking-tight leading-tight"
+              style={{ fontSize: 'clamp(1.15rem, 4.2vw, 1.85rem)' }}
+            >
               Alejo, no sacrifiques tu <span className="text-accent">Trabajo de Grado</span>: entrena 60 minutos con enfoque.
             </h1>
             
-            <p className="mt-2 text-sm text-text-muted leading-relaxed">
+            <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-text-muted leading-snug sm:leading-relaxed">
               El objetivo de tu Prime no es pasar 3 horas en el gimnasio, sino encajar <strong>60 a 70 minutos de alta intensidad</strong> en tus ventanas libres, completar tus <strong>3 a 4 horas en Outlier</strong> y proteger tu descanso a las 10:00 PM.
             </p>
           </div>
 
-          {/* Key Metrics Chips */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full lg:w-auto shrink-0">
-            <div className="bg-surface-2 border border-border p-3.5 rounded-xl text-center">
-              <span className="text-xs text-text-muted font-semibold block">Horas Outlier</span>
-              <span className="font-mono text-xl sm:text-2xl font-black text-accent mt-0.5 block">
+          {/* Key Metrics Chips: Móvil en una sola fila compacta (grid-cols-3 gap-2) */}
+          <div className="grid grid-cols-3 gap-2 w-full lg:w-auto shrink-0">
+            <div className="bg-surface-2 border border-border p-2 sm:p-3.5 rounded-xl text-center min-w-0">
+              <span className="text-[10px] sm:text-xs text-text-muted font-semibold block truncate">Horas Outlier</span>
+              <span className="font-mono text-base sm:text-2xl font-black text-accent mt-0.5 block truncate">
                 <AnimatedNumber value={outlierStats?.totalWeeklyHours || 0} format="hours" />
               </span>
-              <span className="text-[11px] text-text-muted block">Meta: 20h</span>
+              <span className="text-[9px] sm:text-[11px] text-text-muted block truncate">Meta: 20h</span>
             </div>
 
-            <div className="bg-surface-2 border border-border p-3.5 rounded-xl text-center">
-              <span className="text-xs text-text-muted font-semibold block">Conflictos U</span>
-              <span className={`font-mono text-xl sm:text-2xl font-black mt-0.5 block ${conflictsCount > 0 ? 'text-warning' : 'text-success'}`}>
+            <div className="bg-surface-2 border border-border p-2 sm:p-3.5 rounded-xl text-center min-w-0">
+              <span className="text-[10px] sm:text-xs text-text-muted font-semibold block truncate">Conflictos U</span>
+              <span className={`font-mono text-base sm:text-2xl font-black mt-0.5 block truncate ${conflictsCount > 0 ? 'text-warning' : 'text-success'}`}>
                 <AnimatedNumber value={conflictsCount} />
               </span>
-              <span className="text-[11px] text-text-muted block">en agenda</span>
+              <span className="text-[9px] sm:text-[11px] text-text-muted block truncate">en agenda</span>
             </div>
 
-            <div className="bg-surface-2 border border-border p-3.5 rounded-xl text-center col-span-2 sm:col-span-1">
-              <span className="text-xs text-text-muted font-semibold block">Prime Score</span>
-              <span className="font-mono text-xl sm:text-2xl font-black text-success mt-0.5 block">
+            <div className="bg-surface-2 border border-border p-2 sm:p-3.5 rounded-xl text-center min-w-0">
+              <span className="text-[10px] sm:text-xs text-text-muted font-semibold block truncate">Prime Score</span>
+              <span className="font-mono text-base sm:text-2xl font-black text-success mt-0.5 block truncate">
                 <AnimatedNumber value={habitsData?.primeScore || 85} format="percent" />
               </span>
-              <span className="text-[11px] text-text-muted block">Consistencia</span>
+              <span className="text-[9px] sm:text-[11px] text-text-muted block truncate">Consistencia</span>
             </div>
           </div>
         </div>
       </motion.section>
 
-      {/* 2. Mobile Swiper Carousel (< md) */}
-      <div className="block md:hidden pb-3">
-        <Swiper
-          modules={[Pagination]}
-          spaceBetween={16}
-          slidesPerView={1.08}
-          pagination={{ clickable: true }}
-          className="pb-8"
+      {/* 2. Mobile Native Scroll-Snap Carousel (< md) */}
+      <div className="block md:hidden pb-1">
+        <div
+          ref={carouselRef}
+          onScroll={handleCarouselScroll}
+          aria-label="Tarjetas principales del día"
+          className="snap-carousel flex gap-3 overflow-x-auto no-scrollbar py-1 px-1 -mx-1"
         >
           {/* Slide 1: Ventana Prime */}
-          <SwiperSlide>
-            <div className="bg-surface border border-border p-5 rounded-2xl shadow-xs min-h-[260px] flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-accent-subtle text-accent flex items-center justify-center">
-                      <Dumbbell className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-bold text-text">Ventana Prime</span>
+          <div className="w-[86%] min-w-[265px] max-w-[340px] shrink-0 snap-start bg-surface border border-border p-4 sm:p-5 rounded-2xl shadow-xs min-h-[250px] flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-accent-subtle text-accent flex items-center justify-center shrink-0">
+                    <Dumbbell className="w-4 h-4" />
                   </div>
-                  {countdownText && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                      isSlotSoon ? 'bg-warning-subtle text-warning border-warning/30 animate-pulse' : 'bg-surface-2 text-text-muted border-border'
-                    }`}>
-                      {countdownText}
-                    </span>
-                  )}
+                  <span className="text-xs font-bold text-text truncate">Ventana Prime</span>
                 </div>
-
-                <div className="font-mono text-xl font-black text-accent mt-2">
-                  {primeSlot ? `${primeSlot.startStr} – ${primeSlot.endStr}` : 'Modo Express'}
-                </div>
-                <p className="text-xs text-text-muted mt-1 leading-relaxed">
-                  {primeSlot
-                    ? `${primeSlot.duration} min libres continuos sin materias de ingeniería.`
-                    : 'Agenda apretada. Rutina recomendada de 35 min.'}
-                </p>
+                {countdownText && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                    isSlotSoon ? 'bg-warning-subtle text-warning border-warning/30 animate-pulse' : 'bg-surface-2 text-text-muted border-border'
+                  }`}>
+                    {countdownText}
+                  </span>
+                )}
               </div>
 
-              <button
-                onClick={() => setActiveTab('workout')}
-                className="w-full mt-4 py-2.5 px-4 rounded-xl bg-accent text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 min-h-[44px]"
-              >
-                Ver Rutina Gym <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+              <div className="font-mono text-xl font-black text-accent mt-1">
+                {primeSlot ? `${primeSlot.startStr} – ${primeSlot.endStr}` : 'Modo Express'}
+              </div>
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                {primeSlot
+                  ? `${primeSlot.duration} min libres continuos sin materias de ingeniería.`
+                  : 'Agenda apretada. Rutina recomendada de 35 min.'}
+              </p>
             </div>
-          </SwiperSlide>
+
+            <button
+              onClick={() => setActiveTab('workout')}
+              className="w-full mt-3 py-2.5 px-4 rounded-xl bg-accent text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 min-h-[44px] shadow-xs"
+            >
+              Ver Rutina Gym <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
           {/* Slide 2: Hidratación */}
-          <SwiperSlide>
+          <div className="w-[86%] min-w-[265px] max-w-[340px] shrink-0 snap-start">
             <WaterTrackerWidget
               waterData={habitsData?.water}
               onDrink={onDrinkWater}
               onReset={onResetWater}
             />
-          </SwiperSlide>
+          </div>
 
           {/* Slide 3: Turno Outlier */}
-          <SwiperSlide>
-            <div className="bg-surface border border-border p-5 rounded-2xl shadow-xs min-h-[260px] flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-text flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-accent" /> Turno Outlier
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent-subtle text-accent border border-accent/20">
-                    Meta: 3 - 4h
-                  </span>
-                </div>
-                <p className="text-xs text-text-muted mt-2 leading-relaxed">
-                  Cumplir 3.5 horas diarias concentradas garantiza tu flujo semanal de ahorro en dólares sin sacrificar la tesis.
-                </p>
+          <div className="w-[86%] min-w-[265px] max-w-[340px] shrink-0 snap-start bg-surface border border-border p-4 sm:p-5 rounded-2xl shadow-xs min-h-[250px] flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-text flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-accent" /> Turno Outlier
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent-subtle text-accent border border-accent/20">
+                  Meta: 3 - 4h
+                </span>
               </div>
-
-              <button
-                onClick={() => setActiveTab('outlier')}
-                className="w-full py-2.5 px-4 rounded-xl bg-surface-2 hover:bg-surface border border-border text-accent font-bold text-xs flex items-center justify-center gap-2 min-h-[44px]"
-              >
-                Abrir Cronómetro Outlier →
-              </button>
+              <p className="text-xs text-text-muted mt-2 leading-relaxed">
+                Cumplir 3.5 horas diarias concentradas garantiza tu flujo semanal de ahorro en dólares sin sacrificar la tesis.
+              </p>
             </div>
-          </SwiperSlide>
-        </Swiper>
+
+            <button
+              onClick={() => setActiveTab('outlier')}
+              className="w-full mt-3 py-2.5 px-4 rounded-xl bg-surface-2 hover:bg-surface border border-border text-accent font-bold text-xs flex items-center justify-center gap-2 min-h-[44px]"
+            >
+              Abrir Cronómetro Outlier →
+            </button>
+          </div>
+        </div>
+
+        {/* Paginación con puntos visibles */}
+        <div className="flex justify-center items-center gap-1.5 mt-2.5" role="tablist" aria-label="Paginación de tarjetas">
+          {[
+            { id: 0, label: 'Ventana Prime' },
+            { id: 1, label: 'Hidratación' },
+            { id: 2, label: 'Turno Outlier' }
+          ].map((dot) => (
+            <button
+              key={dot.id}
+              role="tab"
+              aria-selected={activeSlide === dot.id}
+              aria-label={`Ver tarjeta: ${dot.label}`}
+              onClick={() => scrollToSlide(dot.id)}
+              className="p-1 min-h-[32px] min-w-[32px] flex items-center justify-center focus-visible:outline-none"
+            >
+              <span
+                className={`block h-1.5 rounded-full transition-all duration-300 ${
+                  activeSlide === dot.id ? 'w-5 bg-accent' : 'w-1.5 bg-text-muted/40 hover:bg-text-muted/70'
+                }`}
+              />
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 3. Desktop Grid Layout (>= md) */}

@@ -17,6 +17,7 @@ const notificationsService = require('./services/notifications/service');
 const pushService = require('./services/notifications/push');
 const whatsappService = require('./services/notifications/whatsapp');
 const reminderScheduler = require('./services/notifications/scheduler');
+const refereeService = require('./services/referee/service');
 
 const PORT = process.env.PORT || 5000;
 const CLIENT_DIST = path.join(__dirname, '..', 'client', 'dist');

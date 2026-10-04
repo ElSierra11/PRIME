@@ -517,7 +517,7 @@ function AppContent({ activeTab, setActiveTab }) {
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <div className="min-h-screen flex flex-col bg-bg text-text antialiased selection:bg-accent selection:text-slate-950 transition-colors relative overflow-x-hidden">
+      <div className="min-h-screen min-h-dvh flex flex-col bg-bg text-text antialiased selection:bg-accent selection:text-slate-950 transition-colors relative overflow-x-clip">
         {/* Ambient Background Blobs */}
         <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
           <div className="ambient-blob-1 absolute -top-32 -left-32 w-96 h-96 rounded-full blur-3xl opacity-75" />
@@ -556,7 +556,7 @@ function AppContent({ activeTab, setActiveTab }) {
           <div
             role="status"
             aria-live="polite"
-            className="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-surface border border-border rounded-2xl shadow-xl text-xs font-bold text-text w-max max-w-[90vw]"
+            className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] md:bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-surface border border-border rounded-2xl shadow-xl text-xs font-bold text-text w-max max-w-[90vw]"
           >
             <span>Nueva versión de PRIME OS disponible</span>
             <button
@@ -579,7 +579,7 @@ function AppContent({ activeTab, setActiveTab }) {
         <main
           id="main-content"
           tabIndex="-1"
-          className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 pb-24 md:pb-12 focus:outline-none"
+          className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-12 focus:outline-none"
         >
           <AnimatePresence mode="wait">
             <motion.div
