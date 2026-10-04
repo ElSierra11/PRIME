@@ -14,6 +14,9 @@ const outlierService = require('./services/outlier/service');
 const habitsService = require('./services/habits/service');
 const financeService = require('./services/finance/service');
 const notificationsService = require('./services/notifications/service');
+const pushService = require('./services/notifications/push');
+const whatsappService = require('./services/notifications/whatsapp');
+const reminderScheduler = require('./services/notifications/scheduler');
 
 const PORT = process.env.PORT || 5000;
 const CLIENT_DIST = path.join(__dirname, '..', 'client', 'dist');
@@ -140,6 +143,16 @@ const server = http.createServer(async (req, res) => {
       });
       return res.end(icsData);
     }
+    if ((pathname === '/api/schedule/feed.ics' || pathname === '/api/schedule/feed') && req.method === 'GET') {
+      const icsData = scheduleService.generateICS(null);
+      res.writeHead(200, {
+        'Content-Type': 'text/calendar; charset=utf-8',
+        'Content-Disposition': 'inline; filename="prime_schedule_feed.ics"',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Access-Control-Allow-Origin': '*'
+      });
+      return res.end(icsData);
+    }
 
     // 3. Outlier Service Routes
     if (pathname === '/api/outlier/stats' && req.method === 'GET') {
@@ -251,6 +264,69 @@ const server = http.createServer(async (req, res) => {
       return sendResponse(res, 200, { success: true, reminder: result });
     }
 
+    // 7. Web Push Endpoints
+    if (pathname === '/api/notifications/push/public-key' && req.method === 'GET') {
+      const publicKey = pushService.getPublicKey();
+      return sendResponse(res, 200, { success: Boolean(publicKey), publicKey });
+    }
+    if (pathname === '/api/notifications/push/subscribe' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const result = pushService.addSubscription(body.subscription || body);
+      return sendResponse(res, 200, result);
+    }
+    if (pathname === '/api/notifications/push/unsubscribe' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const result = pushService.removeSubscription(body.endpoint);
+      return sendResponse(res, 200, result);
+    }
+    if (pathname === '/api/notifications/push/test' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const payload = {
+        title: body.title || '⚡ Test Push PRIME OS',
+        body: body.body || 'Notificación push en segundo plano funcionando al 100%.',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        url: '/?tab=dashboard'
+      };
+      const result = await pushService.sendPushNotification(payload);
+      return sendResponse(res, 200, result);
+    }
+
+    // 8. WhatsApp Service Endpoints
+    if (pathname === '/api/notifications/whatsapp/config' && req.method === 'GET') {
+      return sendResponse(res, 200, { success: true, config: whatsappService.getPublicConfig() });
+    }
+    if (pathname === '/api/notifications/whatsapp/config' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const updated = whatsappService.saveConfig(body);
+      return sendResponse(res, 200, { success: true, config: updated });
+    }
+    if (pathname === '/api/notifications/whatsapp/test' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const testMsg = body.text || '⚡ *PRIME OS*: ¡Notificaciones por WhatsApp vinculadas exitosamente con tu sistema!';
+      const result = await whatsappService.sendMessage(testMsg, body);
+      return sendResponse(res, 200, result);
+    }
+    if (pathname === '/api/notifications/whatsapp/send-summary' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const day = body.day !== undefined ? body.day : 0;
+      const dayData = await scheduleService.getEventsByDay(day);
+      const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+      const msg = whatsappService.formatDailySummaryMessage(dayData.events, days[day]);
+      const result = await whatsappService.sendMessage(msg);
+      return sendResponse(res, 200, result);
+    }
+    if (pathname === '/api/notifications/whatsapp/send-event' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const event = body.event;
+      if (!event) return sendResponse(res, 400, { error: 'Falta objeto event' });
+      const msg = body.is15Min
+        ? whatsappService.formatEvent15MinMessage(event)
+        : whatsappService.formatEventStartMessage(event);
+      const result = await whatsappService.sendMessage(msg);
+      return sendResponse(res, 200, result);
+    }
+
     // Static Frontend files
     if (!pathname.startsWith('/api/')) {
       return serveStatic(req, res, pathname);
@@ -269,4 +345,5 @@ server.listen(PORT, () => {
   console.log(`🚀 PRIME OS (React + Microservicios) activo en http://localhost:${PORT}`);
   console.log(`Usuario autenticado: alejosierra656@gmail.com`);
   console.log(`======================================================\n`);
+  reminderScheduler.start();
 });

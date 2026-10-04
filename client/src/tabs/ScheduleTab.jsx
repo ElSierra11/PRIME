@@ -25,7 +25,11 @@ import {
   Download,
   ExternalLink,
   FileText,
-  Smartphone
+  Smartphone,
+  MessageSquare,
+  Copy,
+  Bell,
+  Send
 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 
@@ -35,6 +39,7 @@ export default function ScheduleTab({
   setSelectedDay,
   onAddEvent,
   onDeleteEvent,
+  onOpenAlertsModal = () => {},
   addToast: addToastProp
 }) {
   const { toast } = useToast();
@@ -66,6 +71,53 @@ export default function ScheduleTab({
       message: 'Listo para abrir en Google Calendar o Apple Calendar en tu celular o PC.',
       category: 'schedule'
     });
+  };
+
+  const handleAddToGoogleCalendar = (ev) => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + distanceToMonday);
+
+    const eventDate = new Date(monday);
+    eventDate.setDate(monday.getDate() + (ev.day !== undefined ? ev.day : selectedDay));
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const [sH, sM] = (ev.start || '09:00').split(':').map(Number);
+    const [eH, eM] = (ev.end || '10:00').split(':').map(Number);
+
+    const y = eventDate.getFullYear();
+    const mo = pad(eventDate.getMonth() + 1);
+    const d = pad(eventDate.getDate());
+
+    const startStr = `${y}${mo}${d}T${pad(sH)}${pad(sM)}00`;
+    const endStr = `${y}${mo}${d}T${pad(eH)}${pad(eM)}00`;
+
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${startStr}/${endStr}&details=${encodeURIComponent(ev.notes || 'Compromiso PRIME OS')}&location=${encodeURIComponent(ev.notes || '')}`;
+    window.open(url, '_blank');
+  };
+
+  const handleSendWhatsAppEvent = async (ev) => {
+    try {
+      const res = await fetch('/api/notifications/whatsapp/send-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: ev, is15Min: false })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success({
+          title: 'Recordatorio enviado a WhatsApp',
+          message: `"${ev.title}" enviado a tu número de WhatsApp.`
+        });
+      } else {
+        const text = encodeURIComponent(`⚡ *PRIME OS - Recordatorio*\n\n📌 *${ev.title}*\n⏰ Horario: ${ev.start} - ${ev.end}\n${ev.notes ? '📝 ' + ev.notes : ''}`);
+        window.open(`https://wa.me/?text=${text}`, '_blank');
+      }
+    } catch (err) {
+      toast.error({ title: 'Error', message: err.message });
+    }
   };
 
   // Form states
@@ -352,6 +404,15 @@ export default function ScheduleTab({
                 Día Detallado
               </button>
             </div>
+
+            <button
+              onClick={() => onOpenAlertsModal()}
+              className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold text-xs sm:text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[44px] shadow-2xs active:scale-[0.98]"
+              title="Configurar recordatorios automáticos por WhatsApp y Notificaciones Push"
+            >
+              <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline">Alertas &amp;</span> <span>WhatsApp</span>
+            </button>
 
             <button
               onClick={() => setIsExportModalOpen(true)}
@@ -802,15 +863,43 @@ export default function ScheduleTab({
                       </div>
                     </div>
 
-                    {/* Delete action button */}
-                    <button
-                      onClick={() => onDeleteEvent(ev.id)}
-                      title={`Eliminar evento: ${ev.title}`}
-                      aria-label={`Eliminar evento: ${ev.title}`}
-                      className="p-2 text-text-muted hover:text-danger rounded-xl hover:bg-surface border border-transparent hover:border-border transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {/* Actions: Google Cal, WhatsApp & Delete */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddToGoogleCalendar(ev);
+                        }}
+                        title={`Añadir "${ev.title}" a Google Calendar`}
+                        aria-label={`Añadir "${ev.title}" a Google Calendar`}
+                        className="p-2 text-text-muted hover:text-sky-400 rounded-xl hover:bg-surface border border-transparent hover:border-border transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        <Calendar className="w-4 h-4 text-sky-400" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSendWhatsAppEvent(ev);
+                        }}
+                        title={`Enviar recordatorio de "${ev.title}" a WhatsApp`}
+                        aria-label={`Enviar recordatorio de "${ev.title}" a WhatsApp`}
+                        className="p-2 text-text-muted hover:text-emerald-400 rounded-xl hover:bg-surface border border-transparent hover:border-border transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                      >
+                        <MessageSquare className="w-4 h-4 text-emerald-400" />
+                      </button>
+
+                      <button
+                        onClick={() => onDeleteEvent(ev.id)}
+                        title={`Eliminar evento: ${ev.title}`}
+                        aria-label={`Eliminar evento: ${ev.title}`}
+                        className="p-2 text-text-muted hover:text-danger rounded-xl hover:bg-surface border border-transparent hover:border-border transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </motion.div>
                 );
               })}
@@ -1132,6 +1221,38 @@ export default function ScheduleTab({
                   <ExternalLink className="w-3.5 h-3.5 text-accent" />
                   Abrir Importador de Google Calendar en la Web
                 </a>
+              </div>
+
+              {/* Live Subscription Feed Option */}
+              <div className="p-3.5 rounded-xl bg-accent-subtle/40 border border-accent/30 space-y-2">
+                <span className="font-bold text-accent text-xs flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" /> Suscripción en Vivo Automática
+                </span>
+                <p className="text-[11px] text-text-muted">
+                  Copia esta URL y agrégala en Google Calendar → <em>"Desde una URL"</em> para que tu celular sincronice los cambios automáticamente:
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    readOnly
+                    value={typeof window !== 'undefined' ? `${window.location.origin}/api/schedule/feed.ics` : '/api/schedule/feed.ics'}
+                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-surface border border-border text-[11px] font-mono text-text focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = `${window.location.origin}/api/schedule/feed.ics`;
+                      navigator.clipboard.writeText(url);
+                      toast.success({
+                        title: 'Enlace del Feed copiado',
+                        message: 'Pégalo en Google Calendar en "Añadir desde una URL".'
+                      });
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-accent text-slate-950 font-bold text-[11px] hover:bg-accent-hover transition-colors shrink-0"
+                  >
+                    <Copy className="w-3 h-3" /> Copiar
+                  </button>
+                </div>
               </div>
 
               {/* Instructions Pill */}

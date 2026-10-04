@@ -108,6 +108,8 @@ self.addEventListener('push', (event) => {
     icon: data.icon || '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     vibrate: [300, 150, 300, 150, 500],
+    tag: data.tag || 'prime-os-notification',
+    requireInteraction: data.requireInteraction || false,
     data: { url: data.url || '/' },
     actions: [
       { action: 'open', title: 'Abrir App' },

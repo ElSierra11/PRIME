@@ -12,6 +12,10 @@ dist
 .env.development.local
 .env.test.local
 .env.production.local
+vapid_keys.json
+server/services/notifications/vapid_keys.json
+server/services/notifications/push_subscriptions.json
+server/services/notifications/whatsapp_config.json
 
 # Logs
 logs

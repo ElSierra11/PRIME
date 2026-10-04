@@ -16,7 +16,8 @@ import {
   ChevronDown,
   Smartphone,
   MonitorCheck,
-  Download
+  Download,
+  MessageSquare
 } from 'lucide-react';
 import AnimatedNumber from './AnimatedNumber';
 import { haptics } from '../utils/haptics';
@@ -34,11 +35,12 @@ export default function Navbar({
   setTheme,
   // Función opcional para precargar el chunk de una pestaña en hover/foco
   onPreloadTab = () => {},
-  // Notificaciones del navegador
+  // Notificaciones del navegador y WhatsApp
   notifPermission = 'default',
   notifSupported = false,
   onRequestNotifPermission = () => {},
   onTestNotification = () => {},
+  onOpenAlertsModal = () => {},
   canInstall = false,
   onInstallApp = () => {}
 }) {
@@ -223,6 +225,17 @@ export default function Navbar({
                 <Moon className="w-4 h-4 text-accent" />
               )}
             </button>
+            {/* WhatsApp & Push Alerts Modal Button */}
+            <button
+              onClick={onOpenAlertsModal}
+              aria-label="Configurar alertas por WhatsApp y Push"
+              title="Alertas automáticas por WhatsApp y Notificaciones Push"
+              className="relative p-2.5 rounded-xl bg-surface-2 hover:bg-surface border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 shadow-2xs"
+            >
+              <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            </button>
+
             {/* Notification Bell Button */}
             <button
               onClick={() => setIsNotificationCenterOpen(!isNotificationCenterOpen)}
@@ -406,6 +419,22 @@ export default function Navbar({
                           )}
                         </div>
                       )}
+
+                      {/* WhatsApp & Alertas Hub */}
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          onOpenAlertsModal();
+                        }}
+                        className="w-full mt-2 flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                      >
+                        <span className="flex items-center gap-2">
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                          Alertas WhatsApp & Push
+                        </span>
+                        <span className="text-[10px] text-emerald-400 font-mono">PRO</span>
+                      </button>
                     </div>
 
                     {/* Botón PWA Install — visible solo si el navegador disparó beforeinstallprompt y no está en standalone */}

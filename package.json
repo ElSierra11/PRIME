@@ -10,7 +10,18 @@
     "dev:client": "npm --prefix client run dev",
     "build:client": "npm --prefix client run build"
   },
-  "keywords": ["prime", "react", "tailwind", "microservices", "fitness", "outlier", "arbitraje"],
+  "keywords": [
+    "prime",
+    "react",
+    "tailwind",
+    "microservices",
+    "fitness",
+    "outlier",
+    "arbitraje"
+  ],
   "author": "Alejo Sierra <alejosierra656@gmail.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
 }

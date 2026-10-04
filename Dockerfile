@@ -21,6 +21,8 @@ ENV PORT=5000
 
 # Copy root package.json & server code
 COPY package*.json ./
+RUN npm ci --omit=dev
+
 COPY server/ ./server/
 
 # Copy compiled frontend from Stage 1 into client/dist

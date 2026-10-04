@@ -3,6 +3,7 @@ import { motion, AnimatePresence, LazyMotion, domAnimation } from 'framer-motion
 import Navbar from './components/Navbar';
 import ToastContainer from './components/ToastContainer';
 import DuolingoSleepModal from './components/DuolingoSleepModal';
+import AlertsWhatsAppModal from './components/AlertsWhatsAppModal';
 import TabSkeleton from './components/TabSkeleton';
 import DashboardTab from './tabs/DashboardTab';
 const ScheduleTab = lazy(() => import('./tabs/ScheduleTab'));
@@ -27,6 +28,7 @@ function AppContent({ activeTab, setActiveTab }) {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const [isSleepAlarmOpen, setIsSleepAlarmOpen] = useState(false);
+  const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
 
   // Today's day index: 0 = Lunes, 6 = Domingo
   const getTodayDayIndex = () => {
@@ -55,16 +57,18 @@ function AppContent({ activeTab, setActiveTab }) {
     }
   });
 
-  // ── Notificaciones del navegador (Alarma 10:00 PM y Agua) ──────
+  // ── Notificaciones del navegador (Alarma 10:00 PM, Calendario y Agua) ──────
   const {
     permission: notifPermission,
     isSupported: notifSupported,
+    isPushSubscribed,
     requestPermission,
     testNotification
   } = useNotifications({
     isSleepConfirmed: !!habitsData?.sleep?.confirmedAsleep,
     currentWaterMl: habitsData?.water?.currentMl || 0,
     waterTargetMl: habitsData?.water?.goalMl || habitsData?.water?.targetMl || 2500,
+    scheduleEvents: scheduleDayData?.events || [],
     addToast
   });
 
@@ -471,6 +475,7 @@ function AppContent({ activeTab, setActiveTab }) {
           notifSupported={notifSupported}
           onRequestNotifPermission={requestPermission}
           onTestNotification={testNotification}
+          onOpenAlertsModal={() => setIsAlertsModalOpen(true)}
           canInstall={!!deferredPrompt && !isStandalone}
           onInstallApp={handleInstallApp}
         />
@@ -534,6 +539,7 @@ function AppContent({ activeTab, setActiveTab }) {
                     setSelectedDay={setSelectedDay}
                     onAddEvent={handleAddEvent}
                     onDeleteEvent={handleDeleteEvent}
+                    onOpenAlertsModal={() => setIsAlertsModalOpen(true)}
                     addToast={addToast}
                   />
                 </Suspense>
@@ -585,6 +591,17 @@ function AppContent({ activeTab, setActiveTab }) {
               message: 'La alarma volverá a sonar si no te acuestas.'
             });
           }}
+        />
+
+        {/* Hub de Alertas WhatsApp, Push y Calendario */}
+        <AlertsWhatsAppModal
+          isOpen={isAlertsModalOpen}
+          onClose={() => setIsAlertsModalOpen(false)}
+          notifPermission={notifPermission}
+          isPushSubscribed={isPushSubscribed}
+          onRequestPushPermission={requestPermission}
+          onTestPushNotification={testNotification}
+          selectedDay={selectedDay}
         />
 
         {/* Unified Toast Container */}

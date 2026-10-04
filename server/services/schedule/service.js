@@ -262,7 +262,19 @@ class ScheduleService {
       'METHOD:PUBLISH',
       'X-WR-CALNAME:PRIME OS - Horario Alejo',
       'X-WR-TIMEZONE:America/Bogota',
-      'X-WR-CALDESC:Horario universitario, Trabajo de Grado, COARC, Outlier y entrenamientos'
+      'X-WR-CALDESC:Horario universitario, Trabajo de Grado, COARC, Outlier y entrenamientos',
+      'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
+      'X-PUBLISHED-TTL:PT1H',
+      'BEGIN:VTIMEZONE',
+      'TZID:America/Bogota',
+      'X-LIC-LOCATION:America/Bogota',
+      'BEGIN:STANDARD',
+      'TZOFFSETFROM:-0500',
+      'TZOFFSETTO:-0500',
+      'TZNAME:COT',
+      'DTSTART:19700101T000000',
+      'END:STANDARD',
+      'END:VTIMEZONE'
     ];
 
     targetEvents.forEach((ev) => {
