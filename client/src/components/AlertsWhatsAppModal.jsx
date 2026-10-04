@@ -34,7 +34,7 @@ export default function AlertsWhatsAppModal({
   const [waConfig, setWaConfig] = useState({
     enabled: true,
     provider: 'callmebot',
-    phone: '573000000000',
+    phone: '573022114190',
     apiKey: '',
     notify15MinBefore: true,
     notifyAtStart: true,

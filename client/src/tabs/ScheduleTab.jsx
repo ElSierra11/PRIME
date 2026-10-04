@@ -113,7 +113,7 @@ export default function ScheduleTab({
         });
       } else {
         const text = encodeURIComponent(`⚡ *PRIME OS - Recordatorio*\n\n📌 *${ev.title}*\n⏰ Horario: ${ev.start} - ${ev.end}\n${ev.notes ? '📝 ' + ev.notes : ''}`);
-        window.open(`https://wa.me/?text=${text}`, '_blank');
+        window.open(`https://wa.me/573022114190?text=${text}`, '_blank');
       }
     } catch (err) {
       toast.error({ title: 'Error', message: err.message });

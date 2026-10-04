@@ -18,8 +18,8 @@ const CONFIG_FILE = path.join(__dirname, 'whatsapp_config.json');
 const DEFAULT_CONFIG = {
   enabled: true,
   provider: 'callmebot', // 'callmebot' | 'twilio' | 'webhook'
-  phone: '573000000000',  // Alejo Sierra phone
-  apiKey: '',             // CallMeBot API Key
+  phone: '573022114190', // Alejo Sierra (+57 302 211 4190)
+  apiKey: '',            // CallMeBot API Key
   notify15MinBefore: true,
   notifyAtStart: true,
   notifyBedtime: true,
