@@ -18,6 +18,7 @@ const pushService = require('./services/notifications/push');
 const whatsappService = require('./services/notifications/whatsapp');
 const reminderScheduler = require('./services/notifications/scheduler');
 const refereeService = require('./services/referee/service');
+const rulesService = require('./services/rules/service');
 
 const PORT = process.env.PORT || 5000;
 const CLIENT_DIST = path.join(__dirname, '..', 'client', 'dist');
@@ -325,6 +326,21 @@ const server = http.createServer(async (req, res) => {
         ? whatsappService.formatEvent15MinMessage(event)
         : whatsappService.formatEventStartMessage(event);
       const result = await whatsappService.sendMessage(msg);
+      return sendResponse(res, 200, result);
+    }
+
+    // 9. Rules & Study Progress Service Routes
+    if (pathname === '/api/rules/progress' && req.method === 'GET') {
+      const result = await rulesService.getProgress();
+      return sendResponse(res, 200, result);
+    }
+    if (pathname === '/api/rules/progress' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const result = await rulesService.updateRuleProgress(body.lawNumber, body.status);
+      return sendResponse(res, 200, result);
+    }
+    if (pathname === '/api/rules/reset' && req.method === 'POST') {
+      const result = await rulesService.resetAllProgress();
       return sendResponse(res, 200, result);
     }
 

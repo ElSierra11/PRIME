@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield,
@@ -12,243 +12,26 @@ import {
   Sparkles,
   Award,
   ChevronRight,
+  ChevronLeft,
+  ChevronDown,
   Eye,
   Filter,
   Zap,
   Target,
-  FileText
+  FileText,
+  ExternalLink,
+  Info,
+  Check,
+  CheckCheck,
+  Clock,
+  ArrowRight,
+  Layers
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { haptics } from '../utils/haptics';
 import { useToast } from '../context/ToastContext';
-
-// ─── 17 REGLAS IFAB CON CRITERIOS TÉCNICOS Y DISCIPLINARIOS ─────────────
-const IFAB_LAWS = [
-  {
-    number: 1,
-    title: 'El Terreno de Juego',
-    category: 'structure',
-    summary: 'Superficie, dimensiones, demarcación, áreas de meta, penal y técnica.',
-    keyPoints: [
-      'Líneas forman parte de las áreas que delimitan (la línea de gol y de penal es adentro).',
-      'Postes y travesaño deben ser de color blanco o plateado y no poner en peligro la integridad física.',
-      'El área técnica: solo una persona a la vez está autorizada para dar instrucciones tácticas.'
-    ],
-    fieldCriteria: 'Revisa redes, banderines y marcación 45 min antes del pitazo inicial. Si hay un charco o línea borrosa en el área penal, es prioridad corregirlo para evitar polémica de gol o penal.',
-    sanction: 'Detención del juego para corregir desperfectos estructurales.'
-  },
-  {
-    number: 2,
-    title: 'El Balón',
-    category: 'structure',
-    summary: 'Propiedades, medidas, presión (0.6 - 1.1 atm) y sustitución de balón defectuoso.',
-    keyPoints: [
-      'Si el balón se desinfla o explota en juego: balón a tierra con un balón nuevo.',
-      'Si se desinfla en un tiro penal sin haber tocado a un jugador o poste: se repite el tiro penal.'
-    ],
-    fieldCriteria: 'Lleva siempre al menos dos balones inflados a la misma presión. Nunca permitas balones de entrenamiento desinflados en torneos COARC.',
-    sanction: 'Balón a tierra en el lugar donde se averió.'
-  },
-  {
-    number: 3,
-    title: 'Los Jugadores',
-    category: 'structure',
-    summary: 'Número de jugadores (mínimo 7), sustituciones, reingresos indebidos y brazalete de capitán.',
-    keyPoints: [
-      'Un jugador expulsado antes del saque inicial puede ser sustituido por un suplente nombrado.',
-      'Si un suplente o miembro del cuerpo técnico entra sin permiso e interfiere: Tiro libre directo o penal + tarjeta amarilla o roja según DOGSO/infracción.',
-      'El capitán tiene la responsabilidad de ayudar a mantener la conducta de su equipo.'
-    ],
-    fieldCriteria: 'Controla el número de sustituciones y ventanas según la categoría de COARC. Verifica que quien sale lo haga por el límite del terreno más cercano para evitar pérdida de tiempo deliberada.',
-    sanction: 'Tiro libre directo/penal si un no autorizado interfiere; indirecto si entra sin interferir.'
-  },
-  {
-    number: 4,
-    title: 'El Equipamiento de los Jugadores',
-    category: 'structure',
-    summary: 'Seguridad obligatoria: canilleras, medias, calzado y prohibición absoluta de joyas.',
-    keyPoints: [
-      'Cero joyas (anillos, cadenas, aretes, piercings). Taparlos con cinta NO está permitido por IFAB.',
-      'Canilleras cubiertas por las medias y de material adecuado para proteger.',
-      'Calzas térmicas del mismo color principal de la pantaloneta.'
-    ],
-    fieldCriteria: 'La inspección de canilleras y joyas antes de salir al campo es tu seguro de vida arbitral. Un corte por arete en una jugada es responsabilidad directa del cuerpo arbitral.',
-    sanction: 'Jugador debe abandonar el terreno para corregir su indumentaria.'
-  },
-  {
-    number: 5,
-    title: 'El Árbitro',
-    category: 'game',
-    summary: 'Autoridad total, toma de decisiones, ley de la ventaja y control disciplinario.',
-    keyPoints: [
-      'Las decisiones sobre hechos de juego son definitivas.',
-      'Ley de la Ventaja: Esperar 2 a 3 segundos antes de pitar si el equipo afectado mantiene posesión y progresión prometedora.',
-      'Si la infracción era merecedora de Tarjeta Roja por Juego Brusco Grave y concedes ventaja: la expulsión se realiza en la siguiente interrupción, pero el infractor NO puede intervenir en la jugada.'
-    ],
-    fieldCriteria: 'Usa modulación del silbato (silbato corto para faltas simples, silbato fuerte y largo para faltas tácticas o tarjetas). Comunicación corporal firme y asertiva.',
-    sanction: 'Gestión disciplinaria de amonestaciones y expulsiones.'
-  },
-  {
-    number: 6,
-    title: 'Los Otros Miembros del Equipo Arbitral',
-    category: 'game',
-    summary: 'Árbitros asistentes (banderín), cuarto árbitro y comunicación en equipo.',
-    keyPoints: [
-      'Asistente prioriza fueras de juego, balones fuera de banda/meta/esquina y faltas cerca a su cuadrante.',
-      'Contacto visual permanente árbitro central - asistente antes de reanudar tras cada jugada dudosa.',
-      'El cuarto árbitro gestiona las áreas técnicas, sustituciones y el tiempo añadido.'
-    ],
-    fieldCriteria: 'En la charla técnica previa con tus asistentes de COARC, define claramente: "Si la falta es en mi espalda o a 5 metros de tu línea, tómala tú con decisión".',
-    sanction: 'Asistencia consultiva y señalamientos con banderola.'
-  },
-  {
-    number: 7,
-    title: 'La Duración del Partido',
-    category: 'game',
-    summary: 'Dos periodos de 45 minutos (o según torneo formativo) y recuperación de tiempo perdido.',
-    keyPoints: [
-      'Tiempo añadido se computa por: sustituciones, atención de lesiones, pérdidas de tiempo deliberadas, celebraciones y demoras del VAR/revisión.',
-      'Se puede aumentar el tiempo añadido anunciado, pero NUNCA reducirlo.',
-      'Pausas de hidratación (máx 1 min) vs pausas de refresco (máx 3 min).'
-    ],
-    fieldCriteria: 'Lleva cronómetro dual (tiempo corrido y tiempo efectivo). No permitas que el equipo que va ganando queme los últimos minutos simulando lesiones en la esquina.',
-    sanction: 'Prolongación exacta del tiempo perdido.'
-  },
-  {
-    number: 8,
-    title: 'El Inicio y la Reanudación del Juego',
-    category: 'restarts',
-    summary: 'Saque inicial y procedimiento de balón a tierra.',
-    keyPoints: [
-      'Saque inicial: el balón puede patearse en cualquier dirección.',
-      'Balón a tierra en el área penal: se entrega SIEMPRE al guardameta defensor.',
-      'Balón a tierra fuera del área penal: se entrega al equipo que tocó por última vez el balón en el punto del último toque. Todos los demás a mínimo 4 metros.'
-    ],
-    fieldCriteria: 'Si el balón pega en ti (el árbitro) y: a) inicia un ataque prometedor, b) entra en el arco, o c) cambia la posesión de equipo ➜ ¡Detén el juego y da balón a tierra!',
-    sanction: 'Balón a tierra con protocolo estricto de 4 metros.'
-  },
-  {
-    number: 9,
-    title: 'El Balón en Juego o Fuera de Juego',
-    category: 'game',
-    summary: 'Límites del terreno y toque involuntario en miembros arbitrales.',
-    keyPoints: [
-      'El balón está fuera cuando ha rebasado COMPLETAMENTE la línea de banda o meta, por aire o tierra.',
-      'El balón sigue en juego si rebota en un poste, travesaño o banderín y permanece dentro.',
-      'Si toca al árbitro y no hay cambio de posesión ni ataque prometedor, el juego continúa.'
-    ],
-    fieldCriteria: 'Entrena tu visión periférica: el 99% de un balón que cruza la línea todavía se considera adentro; debe pasar el 100% de la circunferencia.',
-    sanction: 'Saque de banda, meta, esquina o balón a tierra según corresponda.'
-  },
-  {
-    number: 10,
-    title: 'El Resultado de un Partido',
-    category: 'game',
-    summary: 'Concesión de gol y tanda de penales para desempate.',
-    keyPoints: [
-      'Gol válido: cuando el balón rebasa completamente la línea de meta entre los postes y bajo el travesaño.',
-      'Tanda de penales: solo participan jugadores elegibles en el campo al final del partido (principio de igualdad de número si un equipo tiene menos jugadores).'
-    ],
-    fieldCriteria: 'En tandas de penales, anota el orden de los tiradores y comunica claramente a los arqueros la exigencia del pie en la línea.',
-    sanction: 'Validación de gol o tanda de penales.'
-  },
-  {
-    number: 11,
-    title: 'El Fuera de Juego (Offside)',
-    category: 'fouls',
-    summary: 'Posición vs Infracción, interferir en el juego, interferir a un rival y sacar ventaja.',
-    keyPoints: [
-      'Estar en posición adelantada NO es infracción por sí solo.',
-      'Manos y brazos NO se consideran para determinar posición de fuera de juego.',
-      'Juego Deliberado (Deliberate Play): Si un defensor juega el balón teniendo tiempo, visión clara y control corporal, HABILITA al atacante que estaba adelantado.',
-      'Desvío involuntario (Deflection) o salvada (Save): NO habilita al atacante.'
-    ],
-    fieldCriteria: '¡Clave COARC!: Diferencia siempre entre un defensor que "intenta jugar el balón voluntariamente aunque le pegue mal" (juego deliberado ➜ no hay offside) y un defensor al que "el balón le rebota instintivamente sin tiempo de reacción" (desvío ➜ sí hay offside).',
-    sanction: 'Tiro libre indirecto desde el punto de la infracción.'
-  },
-  {
-    number: 12,
-    title: 'Faltas y Conducta Incorrecta',
-    category: 'fouls',
-    summary: 'Tiros libres directos/indirectos, gradación de faltas, manos, DOGSO, SPA y tarjetas.',
-    keyPoints: [
-      'Gradación: Imprudente (sin tarjeta) | Temeraria (Tarjeta Amarilla) | Fuerza Excesiva (Tarjeta Roja directa).',
-      'Manos: Brazo en posición antinatural ocupando más espacio de forma injustificada por el movimiento del cuerpo.',
-      'DOGSO dentro del área penal: Si se comete buscando el balón o disputándolo ➜ se degrada a Tarjeta Amarilla + Penal.',
-      'DOGSO con sujeción, empuje o sin opción de balón en el área ➜ Tarjeta Roja directa + Penal.',
-      'SPA (Detener ataque prometedor) ➜ Tarjeta Amarilla.'
-    ],
-    fieldCriteria: 'Aplica el test de las 4D para DOGSO: Distancia al arco, Dirección del ataque, Disposición/control del balón y Defensores disponibles. Si falta uno de los 4, es SPA (amarilla) y no DOGSO.',
-    sanction: 'Tiro libre directo, indirecto, penal y medidas disciplinarias (Amarilla/Roja).'
-  },
-  {
-    number: 13,
-    title: 'Tiros Libres',
-    category: 'restarts',
-    summary: 'Directos e indirectos, barrera de 3 o más defensores y distancia reglamentaria de 9.15 m.',
-    keyPoints: [
-      'Tiro libre indirecto: el árbitro debe mantener un brazo alzado hasta que el balón toque a otro jugador o salga del juego.',
-      'Si una barrera tiene 3 o más defensores: todos los atacantes deben estar a mínimo 1 metro de distancia de la barrera.',
-      'Auto-pase no permitido: si el ejecutor toca el balón dos veces antes de que otro lo toque ➜ tiro libre indirecto.'
-    ],
-    fieldCriteria: 'Usa el spray con firmeza a los 9.15 metros contando tus pasos calibrados. Amonesta si un rival adelanta la barrera deliberadamente tras advertencia.',
-    sanction: 'Tiro libre directo o indirecto; amonestación si no respetan distancia.'
-  },
-  {
-    number: 14,
-    title: 'El Tiro Penal',
-    category: 'restarts',
-    summary: 'Procedimiento, adelantamiento del guardameta e invasión de área.',
-    keyPoints: [
-      'El arquero debe tener al menos un pie en la línea o tocándola al momento del impacto.',
-      'Fintas en la carrera permitidas; fintas antirreglamentarias al momento exacto de patear ➜ Tiro libre indirecto + Tarjeta Amarilla al pateador.',
-      'Invasión defensiva con atajada del arquero ➜ se repite el tiro.',
-      'Invasión atacante con gol ➜ se repite el tiro.',
-      'Invasión atacante sin gol ➜ Tiro libre indirecto para la defensa.'
-    ],
-    fieldCriteria: 'Posiciónate entre el punto penal y el borde del área chica, con vista diagonal clara a la línea de gol y a la línea del área penal para controlar adelantamiento e invasión.',
-    sanction: 'Penal, repetición o tiro libre indirecto según tabla de infracciones.'
-  },
-  {
-    number: 15,
-    title: 'El Saque de Banda',
-    category: 'restarts',
-    summary: 'Ejecución con ambas manos, por detrás de la cabeza, pies sobre o detrás de la línea.',
-    keyPoints: [
-      'No se puede marcar gol directamente de un saque de banda.',
-      'Los adversarios deben estar a mínimo 2 metros del punto de saque.',
-      'Si el ejecutor hace doble toque antes de que otro lo toque ➜ Tiro libre indirecto.'
-    ],
-    fieldCriteria: 'Controla que no ganen 10 metros avanzando ilegalmente. Si sacan mal (mal saque de banda con los pies levantados) ➜ pasa la posesión al rival.',
-    sanction: 'Posesión pasa al adversario o tiro libre indirecto por doble toque.'
-  },
-  {
-    number: 16,
-    title: 'El Saque de Meta',
-    category: 'restarts',
-    summary: 'Ejecución desde cualquier punto del área de meta. Balón en juego tan pronto es pateado.',
-    keyPoints: [
-      'El balón está en juego desde que se patea y se mueve (no necesita salir del área penal).',
-      'Los rivales deben estar fuera del área penal hasta que el balón esté en juego.',
-      'Si un rival está dentro del área antes del saque y disputa el balón antes de que salga o se toque ➜ se repite el saque de meta.'
-    ],
-    fieldCriteria: 'Se puede marcar gol directo a favor en saque de meta, pero nunca autogol directo (si entra en propia meta sería tiro de esquina).',
-    sanction: 'Repetición del saque de meta si hay invasión adelantada.'
-  },
-  {
-    number: 17,
-    title: 'El Saque de Esquina',
-    category: 'restarts',
-    summary: 'Colocación en el cuadrante de esquina, bandera obligatoria y distancia de 9.15 m.',
-    keyPoints: [
-      'El balón debe estar dentro o tocando la línea del cuadrante de esquina.',
-      'Rivales a mínimo 9.15 m del cuadrante.',
-      'Se puede anotar gol olímpico directo desde el tiro de esquina.'
-    ],
-    fieldCriteria: 'Ubícate en la diagonal del área chica hacia el punto penal vigilando empujones y sujeciones antes de que salga el balón.',
-    sanction: 'Gol directo válido; tiro libre indirecto por doble toque.'
-  }
-];
+import { IFAB_LAWS_DATA } from '../data/rulesData';
+import { rulesApi } from '../services/rulesApi';
 
 // ─── BANCO DE CASOS PRÁCTICOS & SIMULADOR DE JUICIO ARBITRAL ────────────
 const REFEREE_CASES = [
@@ -366,12 +149,50 @@ const REFEREE_CASES = [
   }
 ];
 
+// Helper de estados de estudio
+const STUDY_STATUS_CONFIG = {
+  no_vista: {
+    label: 'No vista',
+    badgeClass: 'bg-surface-2 text-text-muted border-border',
+    icon: Clock,
+    color: 'text-text-muted'
+  },
+  vista: {
+    label: 'Vista',
+    badgeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+    icon: Eye,
+    color: 'text-sky-400'
+  },
+  practicada: {
+    label: 'Practicada',
+    badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    icon: Zap,
+    color: 'text-amber-400'
+  },
+  dominada: {
+    label: 'Dominada',
+    badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+    icon: CheckCheck,
+    color: 'text-emerald-400'
+  }
+};
+
 export default function RefereeTab() {
   const { toast } = useToast();
   const [activeSection, setActiveSection] = useState('laws'); // 'laws' | 'cases' | 'cheatsheet' | 'flashcards'
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLaw, setSelectedLaw] = useState(IFAB_LAWS[10]); // Regla 11 por defecto
+  const [selectedLawIndex, setSelectedLawIndex] = useState(10); // Regla 11 (índice 10) por defecto
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [studyProgress, setStudyProgress] = useState({});
+  const [mobileViewMode, setMobileViewMode] = useState('list'); // 'list' | 'detail' en pantallas pequeñas
+
+  // Secciones colapsables de los 3 niveles
+  const [expandedLevels, setExpandedLevels] = useState({
+    level1: true,
+    level2: true,
+    level3: true,
+    table: true
+  });
 
   // Simulator Quiz state
   const [currentCaseIndex, setCurrentCaseIndex] = useState(0);
@@ -384,18 +205,99 @@ export default function RefereeTab() {
   const [flashcardIndex, setFlashcardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
 
-  // Filtered Laws
+  // Cargar progreso del backend al montar
+  useEffect(() => {
+    let isMounted = true;
+    rulesApi.getProgress().then((progress) => {
+      if (isMounted && progress) {
+        setStudyProgress(progress);
+      }
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  // Regla actual seleccionada
+  const selectedLaw = IFAB_LAWS_DATA[selectedLawIndex] || IFAB_LAWS_DATA[0];
+
+  // Filtro de reglas
   const filteredLaws = useMemo(() => {
-    return IFAB_LAWS.filter((law) => {
+    return IFAB_LAWS_DATA.filter((law) => {
       const matchesCat = categoryFilter === 'all' || law.category === categoryFilter;
+      const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
-        law.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        law.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        law.fieldCriteria.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        law.number.toString() === q ||
+        law.title.toLowerCase().includes(q) ||
+        law.level1.summary.toLowerCase().includes(q) ||
+        law.practicalCriteria.toLowerCase().includes(q) ||
+        (law.noveltyText && law.noveltyText.toLowerCase().includes(q));
       return matchesCat && matchesSearch;
     });
   }, [categoryFilter, searchQuery]);
 
+  // Métricas de estudio
+  const progressStats = useMemo(() => {
+    let vistas = 0;
+    let practicadas = 0;
+    let dominadas = 0;
+
+    for (let i = 1; i <= 17; i++) {
+      const st = studyProgress[i]?.status || (i === 11 ? 'vista' : 'no_vista');
+      if (st === 'vista') vistas++;
+      else if (st === 'practicada') practicadas++;
+      else if (st === 'dominada') dominadas++;
+    }
+
+    const totalEstudiadas = vistas + practicadas + dominadas;
+    const pct = Math.round((totalEstudiadas / 17) * 100);
+
+    return { totalEstudiadas, vistas, practicadas, dominadas, pct };
+  }, [studyProgress]);
+
+  // Manejador para marcar estado de la regla
+  const handleSetRuleStatus = async (lawNumber, newStatus) => {
+    sounds.playToastChime();
+    haptics.impactLight();
+
+    const updated = await rulesApi.updateProgress(lawNumber, newStatus);
+    setStudyProgress({ ...updated });
+
+    const statusLabel = STUDY_STATUS_CONFIG[newStatus]?.label || newStatus;
+    toast.success({
+      title: `Regla ${lawNumber} actualizada`,
+      message: `Marcada como: "${statusLabel}". Progreso guardado.`
+    });
+  };
+
+  // Alternar siguiente estado de estudio
+  const handleToggleStudyStatus = async (lawNumber) => {
+    const current = studyProgress[lawNumber]?.status || (lawNumber === 11 ? 'vista' : 'no_vista');
+    const order = ['no_vista', 'vista', 'practicada', 'dominada'];
+    const nextIdx = (order.indexOf(current) + 1) % order.length;
+    const nextStatus = order[nextIdx];
+    await handleSetRuleStatus(lawNumber, nextStatus);
+  };
+
+  // Navegación entre reglas
+  const handlePrevLaw = () => {
+    sounds.playToastChime();
+    haptics.impactLight();
+    setSelectedLawIndex((prev) => (prev > 0 ? prev - 1 : IFAB_LAWS_DATA.length - 1));
+  };
+
+  const handleNextLaw = () => {
+    sounds.playToastChime();
+    haptics.impactLight();
+    setSelectedLawIndex((prev) => (prev < IFAB_LAWS_DATA.length - 1 ? prev + 1 : 0));
+  };
+
+  // Toggle de nivel colapsable
+  const toggleLevel = (levelKey) => {
+    setExpandedLevels(prev => ({ ...prev, [levelKey]: !prev[levelKey] }));
+    haptics.impactLight();
+  };
+
+  // Quiz Simulator
   const currentCase = REFEREE_CASES[currentCaseIndex];
 
   const handleSelectOption = (idx) => {
@@ -441,231 +343,516 @@ export default function RefereeTab() {
     });
   };
 
+  // Estado actual de la regla en estudio
+  const currentLawStatus = studyProgress[selectedLaw.number]?.status || (selectedLaw.number === 11 ? 'vista' : 'no_vista');
+  const currentStatusConfig = STUDY_STATUS_CONFIG[currentLawStatus] || STUDY_STATUS_CONFIG.no_vista;
+  const StatusIcon = currentStatusConfig.icon;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Tab Header Banner */}
+      {/* ─── TAB HEADER BANNER ───────────────────────────────────────── */}
       <section className="bg-surface border border-border p-5 sm:p-6 rounded-2xl shadow-xs relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-xs shrink-0">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-accent-subtle border border-accent/30 flex items-center justify-center text-accent shadow-xs shrink-0 mt-0.5 sm:mt-0">
               <Shield className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black text-text tracking-tight">
-                  Reglamento IFAB & Arbitraje COARC
+                  Resumen de estudio · Reglas de Juego 2026/27
                 </h1>
-                <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  OFICIAL
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-accent-subtle text-accent border border-accent/30">
+                  Estudio Activo
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-text-muted mt-0.5">
-                Domina las 17 reglas del fútbol, criterios de interpretación, DOGSO, manos y juicio en campo.
+                Herramienta de estudio del reglamento arbitral: análisis estructurado, criterios prácticos y seguimiento de dominio.
               </p>
             </div>
           </div>
 
-          {/* Quick Score Badge if in quiz */}
-          <div className="flex items-center gap-2 bg-surface-2 px-3.5 py-2 rounded-xl border border-border self-start sm:self-auto shadow-2xs">
-            <Award className="w-4 h-4 text-emerald-400" />
-            <div className="text-right text-xs">
-              <span className="text-text-muted block text-[10px]">Aciertos en Simulador:</span>
+          {/* Quick Study Progress Indicator */}
+          <div className="bg-surface-2 px-4 py-2.5 rounded-xl border border-border self-start lg:self-auto shadow-2xs min-w-[210px]">
+            <div className="flex items-center justify-between text-xs mb-1.5">
+              <span className="text-text-muted font-medium text-[11px]">Progreso de estudio:</span>
               <span className="font-mono font-black text-text">
-                {quizScore} / {totalAnswered || 0} ({totalAnswered ? Math.round((quizScore / totalAnswered) * 100) : 0}%)
+                {progressStats.totalEstudiadas}/17 ({progressStats.pct}%)
               </span>
             </div>
+            <div className="w-full bg-surface rounded-full h-2 overflow-hidden border border-border/40">
+              <div
+                className="bg-accent h-2 transition-all duration-300 rounded-full"
+                style={{ width: `${progressStats.pct}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-text-muted mt-1.5 font-medium">
+              <span>{progressStats.vistas} Vistas</span>
+              <span>{progressStats.practicadas} Practicadas</span>
+              <span className="text-emerald-500 font-bold">{progressStats.dominadas} Dominadas</span>
+            </div>
           </div>
+        </div>
+
+        {/* Fixed Non-Official Material Disclaimer Banner */}
+        <div className="mt-4 pt-3 border-t border-border flex items-start gap-2.5 text-xs text-text-muted bg-surface-2/60 p-3 rounded-xl border border-border/80">
+          <Info className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+          <p className="leading-snug">
+            <strong className="text-text font-bold">Aviso importante:</strong> Material de estudio no oficial; ante dudas o discrepancias de interpretación prevalece siempre el texto oficial de las Reglas de Juego emitido por la IFAB en inglés.
+          </p>
         </div>
 
         {/* Section Navigation Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto pt-4 mt-4 border-t border-border no-scrollbar">
           <button
             onClick={() => setActiveSection('laws')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+            className={`min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
               activeSection === 'laws'
-                ? 'bg-emerald-500 text-slate-950 font-black shadow-xs'
+                ? 'bg-accent text-slate-950 font-black shadow-xs'
                 : 'bg-surface-2 text-text-muted hover:text-text hover:bg-surface border border-border'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5" />
+            <BookOpen className="w-4 h-4" />
             Las 17 Reglas IFAB
           </button>
 
           <button
             onClick={() => setActiveSection('cases')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+            className={`min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
               activeSection === 'cases'
-                ? 'bg-emerald-500 text-slate-950 font-black shadow-xs'
+                ? 'bg-accent text-slate-950 font-black shadow-xs'
                 : 'bg-surface-2 text-text-muted hover:text-text hover:bg-surface border border-border'
             }`}
           >
-            <HelpCircle className="w-3.5 h-3.5" />
+            <HelpCircle className="w-4 h-4" />
             Simulador de Juicio Arbitral
           </button>
 
           <button
             onClick={() => setActiveSection('cheatsheet')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+            className={`min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
               activeSection === 'cheatsheet'
-                ? 'bg-emerald-500 text-slate-950 font-black shadow-xs'
+                ? 'bg-accent text-slate-950 font-black shadow-xs'
                 : 'bg-surface-2 text-text-muted hover:text-text hover:bg-surface border border-border'
             }`}
           >
-            <Target className="w-3.5 h-3.5" />
-            Criterios Clave (Chuleta de Campo)
+            <Target className="w-4 h-4" />
+            Criterios Clave
           </button>
 
           <button
             onClick={() => setActiveSection('flashcards')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+            className={`min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
               activeSection === 'flashcards'
-                ? 'bg-emerald-500 text-slate-950 font-black shadow-xs'
+                ? 'bg-accent text-slate-950 font-black shadow-xs'
                 : 'bg-surface-2 text-text-muted hover:text-text hover:bg-surface border border-border'
             }`}
           >
-            <Zap className="w-3.5 h-3.5" />
+            <Zap className="w-4 h-4" />
             Flashcards Pre-Partido
           </button>
         </div>
       </section>
 
-      {/* ─── SECTION 1: LAS 17 REGLAS IFAB ────────────────────────── */}
+      {/* ─── SECTION 1: LAS 17 REGLAS (ESTUDIO ACTIVO) ───────────────── */}
       {activeSection === 'laws' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: Law List & Filter */}
-          <div className="lg:col-span-5 space-y-3">
-            {/* Search and Category filter */}
-            <div className="space-y-2">
-              <div className="relative">
-                <Search className="w-4 h-4 text-text-muted absolute left-3.5 top-3" />
-                <input
-                  type="text"
-                  placeholder="Buscar regla, palabra clave (mano, DOGSO, fuera de juego)..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-surface border border-border text-text text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 shadow-2xs"
-                />
+        <div>
+          {/* Mobile Back Button when in Detail View on small screens */}
+          <div className="lg:hidden mb-4">
+            {mobileViewMode === 'detail' ? (
+              <button
+                onClick={() => setMobileViewMode('list')}
+                className="min-h-[44px] w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-surface-2 hover:bg-surface border border-border text-xs font-bold text-text shadow-2xs transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4 text-accent" />
+                Volver a la lista de las 17 reglas
+              </button>
+            ) : (
+              <div className="text-xs text-text-muted mb-2 px-1">
+                Selecciona una regla para acceder al estudio detallado en 3 niveles.
               </div>
-
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-                {[
-                  { id: 'all', label: 'Todas (17)' },
-                  { id: 'fouls', label: 'Faltas y Offside' },
-                  { id: 'game', label: 'Árbitro y Juego' },
-                  { id: 'restarts', label: 'Reanudaciones' },
-                  { id: 'structure', label: 'Estructura' }
-                ].map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setCategoryFilter(cat.id)}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap border transition-all ${
-                      categoryFilter === cat.id
-                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                        : 'bg-surface-2 text-text-muted border-border hover:text-text'
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* List of Laws */}
-            <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
-              {filteredLaws.map((law) => {
-                const isSelected = selectedLaw.number === law.number;
-                return (
-                  <button
-                    key={law.number}
-                    onClick={() => {
-                      setSelectedLaw(law);
-                      sounds.playToastChime();
-                    }}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-                      isSelected
-                        ? 'bg-emerald-500/10 border-emerald-500/40 shadow-xs ring-1 ring-emerald-500/30'
-                        : 'bg-surface border-border hover:bg-surface-2 hover:border-border/80'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${
-                        isSelected ? 'bg-emerald-500 text-slate-950' : 'bg-surface-2 text-text-muted'
-                      }`}>
-                        {law.number}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-text truncate">
-                          Regla {law.number} · {law.title}
-                        </div>
-                        <div className="text-[11px] text-text-muted truncate mt-0.5">
-                          {law.summary}
-                        </div>
-                      </div>
-                    </div>
-                    <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${isSelected ? 'text-emerald-400 translate-x-0.5' : 'text-text-muted'}`} />
-                  </button>
-                );
-              })}
-            </div>
+            )}
           </div>
 
-          {/* Right Column: Law Detail View */}
-          <div className="lg:col-span-7">
-            <div className="bg-surface border border-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-5 sticky top-20">
-              {/* Header */}
-              <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500 text-slate-950 font-black text-lg flex items-center justify-center shadow-xs">
-                    {selectedLaw.number}
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black uppercase text-emerald-400 tracking-wider">
-                      Regla Oficial IFAB
-                    </span>
-                    <h2 className="text-lg sm:text-xl font-extrabold text-text">
-                      Regla {selectedLaw.number}: {selectedLaw.title}
-                    </h2>
-                  </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* ── Left Column: Law List & Filter ──────────────────────── */}
+            <div className={`lg:col-span-5 space-y-3 ${mobileViewMode === 'detail' ? 'hidden lg:block' : 'block'}`}>
+              {/* Search & Category Filter */}
+              <div className="space-y-2 bg-surface p-3.5 rounded-2xl border border-border shadow-xs">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-text-muted absolute left-3.5 top-3.5" />
+                  <input
+                    type="text"
+                    placeholder="Buscar regla, palabra clave (fuera de juego, manos, joyas)..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="min-h-[44px] w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-2xs"
+                  />
                 </div>
-              </div>
 
-              {/* Summary */}
-              <div className="p-3.5 rounded-xl bg-surface-2 border border-border text-xs text-text leading-relaxed">
-                <span className="font-bold text-emerald-400 block mb-1">Concepto General:</span>
-                {selectedLaw.summary}
-              </div>
-
-              {/* Key Points */}
-              <div className="space-y-2">
-                <h3 className="text-xs font-black uppercase tracking-wider text-text flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  Aspectos Reglamentarios Fundamentales
-                </h3>
-                <ul className="space-y-2 text-xs text-text-muted">
-                  {selectedLaw.keyPoints.map((pt, i) => (
-                    <li key={i} className="flex items-start gap-2 bg-surface-2/40 p-2.5 rounded-lg border border-border/60">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                      <span className="text-text">{pt}</span>
-                    </li>
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
+                  {[
+                    { id: 'all', label: 'Todas (17)' },
+                    { id: 'structure', label: 'Estructura (1-4)' },
+                    { id: 'game', label: 'Juego (5-10)' },
+                    { id: 'fouls', label: 'Faltas y Offside (11-12)' },
+                    { id: 'restarts', label: 'Reanudaciones (13-17)' }
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setCategoryFilter(cat.id)}
+                      className={`min-h-[36px] px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap border transition-all ${
+                        categoryFilter === cat.id
+                          ? 'bg-accent/15 text-accent border-accent/40 shadow-2xs'
+                          : 'bg-surface-2 text-text-muted border-border hover:text-text'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
                   ))}
-                </ul>
-              </div>
-
-              {/* Field Criteria for COARC */}
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs font-black text-emerald-300">
-                  <Sparkles className="w-4 h-4 text-emerald-400" />
-                  Criterio Práctico en Cancha (Lo que evalúa COARC):
                 </div>
-                <p className="text-xs text-emerald-200/90 leading-relaxed">
-                  {selectedLaw.fieldCriteria}
-                </p>
               </div>
 
-              {/* Technical & Disciplinary Sanction */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-surface-2 border border-border text-xs">
-                <span className="font-bold text-text-muted">Sanción Técnica / Reanudación:</span>
-                <span className="font-bold text-text">{selectedLaw.sanction}</span>
+              {/* List of Laws */}
+              <div className="space-y-2 max-h-[700px] overflow-y-auto pr-1">
+                {filteredLaws.map((law) => {
+                  const isSelected = selectedLaw.number === law.number;
+                  const lawIndex = IFAB_LAWS_DATA.findIndex(l => l.number === law.number);
+                  const lawStatus = studyProgress[law.number]?.status || (law.number === 11 ? 'vista' : 'no_vista');
+                  const statusCfg = STUDY_STATUS_CONFIG[lawStatus] || STUDY_STATUS_CONFIG.no_vista;
+                  const LawStatusIcon = statusCfg.icon;
+
+                  return (
+                    <button
+                      key={law.number}
+                      onClick={() => {
+                        setSelectedLawIndex(lawIndex);
+                        setMobileViewMode('detail');
+                        sounds.playToastChime();
+                        haptics.impactLight();
+                      }}
+                      className={`min-h-[64px] w-full flex items-start justify-between p-3.5 rounded-xl border text-left transition-all ${
+                        isSelected
+                          ? 'bg-accent/10 border-accent shadow-xs ring-1 ring-accent/30'
+                          : 'bg-surface border-border hover:bg-surface-2 hover:border-border-subtle'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 min-w-0">
+                        {/* Number Box */}
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0 mt-0.5 ${
+                          isSelected ? 'bg-accent text-slate-950' : 'bg-surface-2 text-text-muted border border-border'
+                        }`}>
+                          {law.number}
+                        </div>
+
+                        {/* Title and Summary */}
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-bold text-text truncate">
+                              Regla {law.number}: {law.title}
+                            </span>
+                            {law.hasNovelty2026 && (
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">
+                                Novedad
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-[11px] text-text-muted line-clamp-1">
+                            {law.level1.summary}
+                          </p>
+
+                          {/* Chips: Audit Status & Study Status */}
+                          <div className="flex items-center gap-2 pt-0.5">
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusCfg.badgeClass}`}>
+                              <LawStatusIcon className="w-2.5 h-2.5" />
+                              {statusCfg.label}
+                            </span>
+
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                              law.auditStatus.includes('Verificada')
+                                ? 'text-emerald-500 bg-emerald-500/10'
+                                : 'text-amber-500 bg-amber-500/10'
+                            }`}>
+                              {law.auditStatus}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <ChevronRight className={`w-4 h-4 shrink-0 transition-transform mt-2 ${
+                        isSelected ? 'text-accent translate-x-1' : 'text-text-muted'
+                      }`} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Right Column: Law Detail View ─────────────────────── */}
+            <div className={`lg:col-span-7 ${mobileViewMode === 'list' ? 'hidden lg:block' : 'block'}`}>
+              <div className="bg-surface border border-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-6">
+                {/* Header: Title, Official Link & Badges */}
+                <div className="border-b border-border pb-5 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-12 h-12 rounded-xl bg-accent text-slate-950 font-black text-xl flex items-center justify-center shadow-xs shrink-0">
+                        {selectedLaw.number}
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                            selectedLaw.auditStatus.includes('Verificada')
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                              : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                          }`}>
+                            {selectedLaw.auditStatus}
+                          </span>
+
+                          {selectedLaw.hasNovelty2026 && (
+                            <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" />
+                              Novedad 2026/27
+                            </span>
+                          )}
+                        </div>
+
+                        <h2 className="text-xl sm:text-2xl font-black text-text mt-1">
+                          Regla {selectedLaw.number}: {selectedLaw.title}
+                        </h2>
+                      </div>
+                    </div>
+
+                    {/* Official Text External Link */}
+                    <a
+                      href={selectedLaw.officialUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-h-[44px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-surface-2 hover:bg-surface border border-border text-xs font-bold text-text hover:text-accent transition-colors self-start shadow-2xs"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-accent" />
+                      <span>Ver texto oficial</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-text-muted" />
+                    </a>
+                  </div>
+
+                  {/* Study Status Action Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 bg-surface-2/60 p-3 rounded-xl border border-border">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-text-muted font-medium">Estado actual:</span>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${currentStatusConfig.badgeClass}`}>
+                        <StatusIcon className="w-3.5 h-3.5" />
+                        {currentStatusConfig.label}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => handleToggleStudyStatus(selectedLaw.number)}
+                      className="min-h-[44px] flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-slate-950 hover:opacity-95 font-black text-xs transition-transform active:scale-95 shadow-xs"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Marcar como estudiada</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Callout if Law has NeedsVerification (e.g. Rule 4) */}
+                {selectedLaw.needsVerification && (
+                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/40 space-y-1.5">
+                    <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      TODO: Verificar contra el PDF oficial 2026/27
+                    </div>
+                    <p className="text-xs text-amber-300/90 leading-relaxed">
+                      {selectedLaw.verificationNotes}
+                    </p>
+                  </div>
+                )}
+
+                {/* Novelty description if present */}
+                {selectedLaw.hasNovelty2026 && selectedLaw.noveltyText && (
+                  <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 space-y-1.5">
+                    <div className="flex items-center gap-2 text-purple-400 font-bold text-xs uppercase tracking-wider">
+                      <Sparkles className="w-4 h-4 shrink-0" />
+                      Alineación y Novedad 2026/27
+                    </div>
+                    <p className="text-xs text-purple-300/90 leading-relaxed">
+                      {selectedLaw.noveltyText}
+                    </p>
+                  </div>
+                )}
+
+                {/* ─── LEVEL 1: ESENCIAL (30 s) ────────────────────────── */}
+                <div className="border border-border rounded-xl overflow-hidden bg-surface-2/40">
+                  <button
+                    onClick={() => toggleLevel('level1')}
+                    className="min-h-[48px] w-full p-4 flex items-center justify-between bg-surface-2/80 hover:bg-surface-2 text-left font-bold text-sm text-text transition-colors border-b border-border/60"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded-md bg-accent/20 text-accent flex items-center justify-center text-xs font-black">
+                        1
+                      </div>
+                      <span className="font-extrabold text-text">Nivel 1: {selectedLaw.level1.title}</span>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${expandedLevels.level1 ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {expandedLevels.level1 && (
+                    <div className="p-4 sm:p-5 space-y-4 text-[15px] sm:text-base leading-relaxed text-text">
+                      <div className="p-3.5 rounded-xl bg-surface border border-border text-[15px] leading-relaxed">
+                        <span className="font-bold text-accent block mb-1 text-xs uppercase tracking-wider">Concepto Matriz:</span>
+                        {selectedLaw.level1.summary}
+                      </div>
+
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-text-muted">Puntos Esenciales:</h4>
+                        <ul className="space-y-2 text-xs sm:text-[14px]">
+                          {selectedLaw.level1.corePoints.map((pt, idx) => (
+                            <li key={idx} className="flex items-start gap-2.5 bg-surface/70 p-3 rounded-lg border border-border/80">
+                              <CheckCircle2 className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                              <span className="text-text">{pt}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ─── LEVEL 2: DETALLE NORMATIVO ──────────────────────── */}
+                <div className="border border-border rounded-xl overflow-hidden bg-surface-2/40">
+                  <button
+                    onClick={() => toggleLevel('level2')}
+                    className="min-h-[48px] w-full p-4 flex items-center justify-between bg-surface-2/80 hover:bg-surface-2 text-left font-bold text-sm text-text transition-colors border-b border-border/60"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded-md bg-accent/20 text-accent flex items-center justify-center text-xs font-black">
+                        2
+                      </div>
+                      <span className="font-extrabold text-text">Nivel 2: {selectedLaw.level2.title}</span>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${expandedLevels.level2 ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {expandedLevels.level2 && (
+                    <div className="p-4 sm:p-5 space-y-4 text-[15px] sm:text-base leading-relaxed text-text">
+                      {selectedLaw.level2.sections.map((sec, idx) => (
+                        <div key={idx} className="p-4 rounded-xl bg-surface border border-border space-y-1.5">
+                          <h4 className="font-black text-text text-sm sm:text-[15px] flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                            {sec.subtitle}
+                          </h4>
+                          <p className="text-text-muted text-[15px] leading-relaxed">
+                            {sec.text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ─── LEVEL 3: EXCEPCIONES Y CASOS LÍMITE ────────────── */}
+                <div className="border border-border rounded-xl overflow-hidden bg-surface-2/40">
+                  <button
+                    onClick={() => toggleLevel('level3')}
+                    className="min-h-[48px] w-full p-4 flex items-center justify-between bg-surface-2/80 hover:bg-surface-2 text-left font-bold text-sm text-text transition-colors border-b border-border/60"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded-md bg-accent/20 text-accent flex items-center justify-center text-xs font-black">
+                        3
+                      </div>
+                      <span className="font-extrabold text-text">Nivel 3: {selectedLaw.level3.title}</span>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${expandedLevels.level3 ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {expandedLevels.level3 && (
+                    <div className="p-4 sm:p-5 space-y-3">
+                      {selectedLaw.level3.cases.map((c, idx) => (
+                        <div key={idx} className="p-4 rounded-xl bg-surface border border-border/90 space-y-1.5">
+                          <h5 className="font-black text-text text-xs sm:text-sm flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                            {c.caseTitle}
+                          </h5>
+                          <p className="text-text-muted text-xs sm:text-[14px] leading-relaxed">
+                            {c.text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ─── TABLA: INFRACCIÓN → REANUDACIÓN → SANCIÓN ──────── */}
+                <div className="border border-border rounded-xl overflow-hidden bg-surface-2/40">
+                  <button
+                    onClick={() => toggleLevel('table')}
+                    className="min-h-[48px] w-full p-4 flex items-center justify-between bg-surface-2/80 hover:bg-surface-2 text-left font-bold text-sm text-text transition-colors border-b border-border/60"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <FileText className="w-4 h-4 text-accent" />
+                      <span className="font-extrabold text-text">Tabla Técnica: Infracción → Reanudación → Sanción</span>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${expandedLevels.table ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {expandedLevels.table && (
+                    <div className="p-4 sm:p-5 overflow-x-auto">
+                      <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[500px]">
+                        <thead>
+                          <tr className="border-b border-border text-text-muted uppercase text-[10px] tracking-wider font-bold">
+                            <th className="py-2.5 px-3">Infracción en el juego</th>
+                            <th className="py-2.5 px-3">Reanudación técnica</th>
+                            <th className="py-2.5 px-3">Sanción disciplinaria</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/60">
+                          {selectedLaw.table.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-surface-2/50 transition-colors">
+                              <td className="py-3 px-3 font-medium text-text align-top">{row.infraction}</td>
+                              <td className="py-3 px-3 text-accent font-semibold align-top">{row.restart}</td>
+                              <td className="py-3 px-3 text-text-muted align-top">{row.sanction}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* ─── CRITERIO PRÁCTICO EN CANCHA ────────────────────── */}
+                <div className="p-4 sm:p-5 rounded-xl bg-accent-subtle border border-accent/30 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-black text-accent uppercase tracking-wider">
+                    <Sparkles className="w-4 h-4" />
+                    Criterio práctico en cancha
+                  </div>
+                  <p className="text-xs sm:text-[14px] text-text leading-relaxed">
+                    {selectedLaw.practicalCriteria}
+                  </p>
+                </div>
+
+                {/* ─── NAVIGATION FOOTER (ANTERIOR / SIGUIENTE) ───────── */}
+                <div className="flex items-center justify-between pt-4 border-t border-border gap-3">
+                  <button
+                    onClick={handlePrevLaw}
+                    className="min-h-[44px] flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-2 hover:bg-surface border border-border text-xs font-bold text-text transition-colors shadow-2xs"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Regla anterior</span>
+                  </button>
+
+                  <span className="text-xs font-mono text-text-muted font-bold">
+                    {selectedLaw.number} / 17
+                  </span>
+
+                  <button
+                    onClick={handleNextLaw}
+                    className="min-h-[44px] flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent hover:opacity-95 text-slate-950 font-black text-xs transition-colors shadow-xs"
+                  >
+                    <span>Regla siguiente</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -678,7 +865,7 @@ export default function RefereeTab() {
           <div className="bg-surface border border-border p-5 sm:p-7 rounded-2xl shadow-xs space-y-5">
             {/* Case Progress Bar */}
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+              <span className="font-bold text-accent flex items-center gap-1.5">
                 <HelpCircle className="w-4 h-4" /> Caso {currentCaseIndex + 1} de {REFEREE_CASES.length}
               </span>
               <span className="text-text-muted text-[11px] font-mono">
@@ -688,7 +875,7 @@ export default function RefereeTab() {
 
             <div className="w-full bg-surface-2 rounded-full h-1.5 overflow-hidden">
               <div
-                className="bg-emerald-500 h-1.5 transition-all duration-300 rounded-full"
+                className="bg-accent h-1.5 transition-all duration-300 rounded-full"
                 style={{ width: `${((currentCaseIndex + 1) / REFEREE_CASES.length) * 100}%` }}
               />
             </div>
@@ -706,7 +893,7 @@ export default function RefereeTab() {
                 {currentCase.situation}
               </div>
 
-              <p className="text-xs sm:text-sm font-bold text-emerald-400 pt-1">
+              <p className="text-xs sm:text-sm font-bold text-accent pt-1">
                 ❓ {currentCase.question}
               </p>
             </div>
@@ -715,13 +902,13 @@ export default function RefereeTab() {
             <div className="space-y-2.5 pt-2">
               {currentCase.options.map((opt, idx) => {
                 const isSelected = selectedOption === idx;
-                let btnStyle = 'bg-surface border-border hover:bg-surface-2 hover:border-emerald-500/50 text-text';
+                let btnStyle = 'bg-surface border-border hover:bg-surface-2 hover:border-accent/50 text-text';
 
                 if (hasAnswered) {
                   if (opt.isCorrect) {
-                    btnStyle = 'bg-emerald-500/15 border-emerald-500 text-emerald-300 font-bold ring-1 ring-emerald-500';
+                    btnStyle = 'bg-emerald-500/15 border-emerald-500 text-emerald-400 font-bold ring-1 ring-emerald-500';
                   } else if (isSelected && !opt.isCorrect) {
-                    btnStyle = 'bg-red-500/15 border-red-500 text-red-300 font-bold ring-1 ring-red-500';
+                    btnStyle = 'bg-red-500/15 border-red-500 text-red-400 font-bold ring-1 ring-red-500';
                   } else {
                     btnStyle = 'bg-surface/50 border-border/50 text-text-muted opacity-60';
                   }
@@ -732,7 +919,7 @@ export default function RefereeTab() {
                     key={idx}
                     onClick={() => handleSelectOption(idx)}
                     disabled={hasAnswered}
-                    className={`w-full p-3.5 sm:p-4 rounded-xl border text-left text-xs sm:text-sm transition-all flex items-start justify-between gap-3 ${btnStyle}`}
+                    className={`min-h-[48px] w-full p-3.5 sm:p-4 rounded-xl border text-left text-xs sm:text-sm transition-all flex items-start justify-between gap-3 ${btnStyle}`}
                   >
                     <div className="flex items-start gap-3">
                       <span className="w-6 h-6 rounded-lg bg-surface-2 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
@@ -761,8 +948,8 @@ export default function RefereeTab() {
                   className="p-4 rounded-xl bg-surface-2 border border-border space-y-2 mt-4"
                 >
                   <div className="flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-black uppercase text-emerald-400 tracking-wider">
+                    <BookOpen className="w-4 h-4 text-accent" />
+                    <span className="text-xs font-black uppercase text-accent tracking-wider">
                       Fundamentación Reglamentaria IFAB:
                     </span>
                   </div>
@@ -777,7 +964,7 @@ export default function RefereeTab() {
             <div className="flex items-center justify-between pt-4 border-t border-border">
               <button
                 onClick={handleResetQuiz}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-text-muted hover:text-text hover:bg-surface-2 transition-colors"
+                className="min-h-[44px] flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-text-muted hover:text-text hover:bg-surface-2 transition-colors"
               >
                 <RotateCcw className="w-3.5 h-3.5" /> Reiniciar Test
               </button>
@@ -785,7 +972,7 @@ export default function RefereeTab() {
               {hasAnswered && (
                 <button
                   onClick={handleNextCase}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-colors shadow-xs"
+                  className="min-h-[44px] flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent hover:opacity-95 text-slate-950 font-black text-xs transition-colors shadow-xs"
                 >
                   Siguiente Jugada
                   <ChevronRight className="w-4 h-4" />
@@ -818,33 +1005,33 @@ export default function RefereeTab() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-black text-red-300 text-sm">DOGSO (Ocasión Manifiesta de Gol)</span>
+                  <span className="font-black text-red-400 text-sm">DOGSO (Ocasión Manifiesta de Gol)</span>
                   <span className="px-2 py-0.5 rounded font-black text-[10px] bg-red-500 text-slate-950">ROJA DIRECTA 🟥</span>
                 </div>
-                <p className="text-red-200/80">Deben cumplirse los 4 factores ("Las 4 D"):</p>
-                <ul className="list-disc list-inside space-y-1 text-red-100">
+                <p className="text-text-muted">Deben cumplirse los 4 factores ("Las 4 D"):</p>
+                <ul className="list-disc list-inside space-y-1 text-text">
                   <li><strong>Distancia:</strong> Cerca al arco rival.</li>
                   <li><strong>Dirección:</strong> Con trayectoria directa hacia la portería.</li>
                   <li><strong>Disposición/Control:</strong> Posibilidad real de rematar o controlar el balón.</li>
                   <li><strong>Defensores:</strong> No hay defensores rivales que puedan interceptar antes del remate.</li>
                 </ul>
-                <div className="p-2.5 rounded bg-surface/50 border border-red-500/40 text-[11px] text-amber-300 font-bold mt-2">
+                <div className="p-2.5 rounded bg-surface border border-red-500/40 text-[11px] text-amber-400 font-bold mt-2">
                   ⚠️ En el área penal: Se degrada a AMARILLA 🟨 SOLO si fue disputando el balón. Si fue sujeción o empujón ➜ ROJA 🟥.
                 </div>
               </div>
 
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-black text-amber-300 text-sm">SPA (Ataque Prometedor)</span>
+                  <span className="font-black text-amber-400 text-sm">SPA (Ataque Prometedor)</span>
                   <span className="px-2 py-0.5 rounded font-black text-[10px] bg-amber-500 text-slate-950">AMARILLA 🟨</span>
                 </div>
-                <p className="text-amber-200/80">Se sanciona cuando falta alguno de los 4 factores de DOGSO pero hay peligro:</p>
-                <ul className="list-disc list-inside space-y-1 text-amber-100">
+                <p className="text-text-muted">Se sanciona cuando falta alguno de los 4 factores de DOGSO pero hay peligro:</p>
+                <ul className="list-disc list-inside space-y-1 text-text">
                   <li>Hay compañeros con opción de pase claro.</li>
                   <li>Espacio abierto para avanzar con superioridad numérica.</li>
                   <li>Hay un defensor que aún podía cruzar a tiempo.</li>
                 </ul>
-                <div className="p-2.5 rounded bg-surface/50 border border-amber-500/40 text-[11px] text-sky-300 font-bold mt-2">
+                <div className="p-2.5 rounded bg-surface border border-amber-500/40 text-[11px] text-accent font-bold mt-2">
                   💡 Si concedes ventaja y termina en GOL ➜ NO se muestra tarjeta por SPA.
                 </div>
               </div>
@@ -854,7 +1041,7 @@ export default function RefereeTab() {
           {/* Card 2: Criterio de Manos */}
           <div className="bg-surface border border-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+              <div className="p-2 rounded-xl bg-accent-subtle text-accent border border-accent/30">
                 <Shield className="w-5 h-5" />
               </div>
               <div>
@@ -869,8 +1056,8 @@ export default function RefereeTab() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div className="p-4 rounded-xl bg-surface-2 border border-border space-y-2">
-                <span className="font-bold text-danger text-sm flex items-center gap-1.5">
-                  <XCircle className="w-4 h-4 text-danger" /> SÍ ES INFRACCIÓN (Pitar falta o penal)
+                <span className="font-bold text-red-500 text-sm flex items-center gap-1.5">
+                  <XCircle className="w-4 h-4 text-red-500" /> SÍ ES INFRACCIÓN (Pitar falta o penal)
                 </span>
                 <ul className="space-y-1.5 text-text-muted list-disc list-inside">
                   <li>Tocar el balón deliberadamente (movimiento del brazo hacia el balón).</li>
@@ -880,8 +1067,8 @@ export default function RefereeTab() {
               </div>
 
               <div className="p-4 rounded-xl bg-surface-2 border border-border space-y-2">
-                <span className="font-bold text-success text-sm flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-success" /> NO ES INFRACCIÓN (Juega)
+                <span className="font-bold text-emerald-500 text-sm flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" /> NO ES INFRACCIÓN (Juega)
                 </span>
                 <ul className="space-y-1.5 text-text-muted list-disc list-inside">
                   <li>El balón proviene directamente de la cabeza o cuerpo del propio jugador tras jugarlo voluntariamente.</li>
@@ -906,9 +1093,9 @@ export default function RefereeTab() {
               setIsFlipped(!isFlipped);
               sounds.playToastChime();
             }}
-            className="cursor-pointer min-h-[260px] p-6 sm:p-8 rounded-2xl bg-surface border-2 border-emerald-500/40 shadow-lg flex flex-col items-center justify-center text-center space-y-4 hover:border-emerald-400 transition-all select-none"
+            className="cursor-pointer min-h-[260px] p-6 sm:p-8 rounded-2xl bg-surface border-2 border-accent/40 shadow-lg flex flex-col items-center justify-center text-center space-y-4 hover:border-accent transition-all select-none"
           >
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/30">
+            <span className="text-[10px] font-black uppercase tracking-wider text-accent bg-accent-subtle px-3 py-1 rounded-full border border-accent/30">
               {isFlipped ? 'RESPUESTA Y CRITERIO IFAB' : 'PREGUNTA ARBITRAL RÁPIDA'}
             </span>
 
@@ -919,7 +1106,7 @@ export default function RefereeTab() {
             </div>
 
             <p className="text-[11px] text-text-muted flex items-center gap-1">
-              <Eye className="w-3.5 h-3.5 text-emerald-400" />
+              <Eye className="w-3.5 h-3.5 text-accent" />
               {isFlipped ? 'Toca para volver a la pregunta' : 'Toca para ver el criterio reglamentario'}
             </p>
           </div>
@@ -930,7 +1117,7 @@ export default function RefereeTab() {
                 setIsFlipped(false);
                 setFlashcardIndex(prev => (prev === 0 ? REFEREE_CASES.length - 1 : prev - 1));
               }}
-              className="px-4 py-2 rounded-xl bg-surface-2 hover:bg-surface border border-border text-xs font-bold text-text transition-colors"
+              className="min-h-[44px] px-4 py-2 rounded-xl bg-surface-2 hover:bg-surface border border-border text-xs font-bold text-text transition-colors"
             >
               Anterior
             </button>
@@ -944,7 +1131,7 @@ export default function RefereeTab() {
                 setIsFlipped(false);
                 setFlashcardIndex(prev => (prev + 1) % REFEREE_CASES.length);
               }}
-              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black transition-colors shadow-xs"
+              className="min-h-[44px] px-4 py-2 rounded-xl bg-accent hover:opacity-95 text-slate-950 text-xs font-black transition-colors shadow-xs"
             >
               Siguiente Tarjeta
             </button>
