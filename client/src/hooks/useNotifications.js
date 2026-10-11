@@ -107,12 +107,12 @@ export function useNotifications({
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(() => {
+      navigator.serviceWorker.ready.then(() => {
         if (Notification.permission === 'granted') {
           subscribeToWebPush();
         }
       }).catch((err) => {
-        console.warn('Error registrando Service Worker:', err);
+        console.warn('Error esperando Service Worker:', err);
       });
     }
   }, [subscribeToWebPush]);

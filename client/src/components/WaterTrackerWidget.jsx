@@ -33,12 +33,14 @@ export default function WaterTrackerWidget({ waterData, onDrink, onReset, addToa
     const newMl = (Number(currentMl) || 0) + safeAmount;
     if (newMl >= goalMl && currentMl < goalMl) {
       haptics.waterGoal();
+      try { sounds.playSuccessChime(); } catch (_) {}
       toast.achievement({
         title: '¡Meta de agua alcanzada! (2.5L)',
         message: '2,500 ml completados. Tu rendimiento cognitivo y físico está al 100%.',
         category: 'water'
       });
     } else {
+      try { sounds.playWaterDropSound(); } catch (_) {}
       toast.reminder({
         title: `+${safeAmount} ml de agua registrados`,
         message: `Total: ${newMl} ml de tu meta diaria (2.5L). ¡Mantén tu energía alta!`,

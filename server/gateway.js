@@ -344,6 +344,20 @@ const server = http.createServer(async (req, res) => {
       return sendResponse(res, 200, result);
     }
 
+    // 10. Referee & IFAB Updates Service Routes
+    if (pathname === '/api/referee/info' && req.method === 'GET') {
+      const result = refereeService.getIFABVersion();
+      return sendResponse(res, 200, { success: true, ...result });
+    }
+    if (pathname === '/api/referee/updates' && req.method === 'GET') {
+      const result = refereeService.getUpdates();
+      return sendResponse(res, 200, result);
+    }
+    if (pathname === '/api/referee/scenarios' && req.method === 'GET') {
+      const result = refereeService.getVisualScenarios();
+      return sendResponse(res, 200, result);
+    }
+
     // Static Frontend files
     if (!pathname.startsWith('/api/')) {
       return serveStatic(req, res, pathname);

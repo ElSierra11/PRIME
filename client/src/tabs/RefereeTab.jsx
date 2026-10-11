@@ -177,7 +177,7 @@ const STUDY_STATUS_CONFIG = {
   }
 };
 
-export default function RefereeTab() {
+export default function RefereeTab({ addToast: addToastProp } = {}) {
   const { toast } = useToast();
   const [activeSection, setActiveSection] = useState('laws'); // 'laws' | 'cases' | 'cheatsheet' | 'flashcards'
   const [searchQuery, setSearchQuery] = useState('');
@@ -254,19 +254,36 @@ export default function RefereeTab() {
     return { totalEstudiadas, vistas, practicadas, dominadas, pct };
   }, [studyProgress]);
 
-  // Manejador para marcar estado de la regla
+  // Manejador para marcar estado de la regla con actualización optimista inmediata
   const handleSetRuleStatus = async (lawNumber, newStatus) => {
-    sounds.playToastChime();
-    haptics.impactLight();
+    try { sounds?.playToastChime?.(); } catch (_) {}
+    try { haptics?.impactLight?.(); } catch (_) {}
 
-    const updated = await rulesApi.updateProgress(lawNumber, newStatus);
-    setStudyProgress({ ...updated });
+    // Actualización optimista inmediata en estado local
+    setStudyProgress((prev) => ({
+      ...prev,
+      [lawNumber]: {
+        ...(prev[lawNumber] || {}),
+        status: newStatus,
+        lastStudied: new Date().toISOString(),
+        timesReviewed: ((prev[lawNumber]?.timesReviewed) || 0) + 1
+      }
+    }));
 
     const statusLabel = STUDY_STATUS_CONFIG[newStatus]?.label || newStatus;
     toast.success({
       title: `Regla ${lawNumber} actualizada`,
       message: `Marcada como: "${statusLabel}". Progreso guardado.`
     });
+
+    try {
+      const updated = await rulesApi.updateProgress(lawNumber, newStatus);
+      if (updated) {
+        setStudyProgress({ ...updated });
+      }
+    } catch (err) {
+      console.warn('Error guardando progreso:', err);
+    }
   };
 
   // Alternar siguiente estado de estudio
@@ -278,23 +295,56 @@ export default function RefereeTab() {
     await handleSetRuleStatus(lawNumber, nextStatus);
   };
 
-  // Navegación entre reglas
+  // Navegación entre reglas (respetando filtros si existen)
   const handlePrevLaw = () => {
-    sounds.playToastChime();
-    haptics.impactLight();
+    try { sounds?.playToastChime?.(); } catch {}
+    try { haptics?.impactLight?.(); } catch {}
+
+    if (filteredLaws.length > 0) {
+      const currentFilteredIdx = filteredLaws.findIndex(l => l.number === selectedLaw.number);
+      const prevFilteredIdx = currentFilteredIdx > 0 ? currentFilteredIdx - 1 : filteredLaws.length - 1;
+      const targetLawNumber = filteredLaws[prevFilteredIdx].number;
+      const targetGlobalIdx = IFAB_LAWS_DATA.findIndex(l => l.number === targetLawNumber);
+      if (targetGlobalIdx !== -1) {
+        setSelectedLawIndex(targetGlobalIdx);
+        return;
+      }
+    }
     setSelectedLawIndex((prev) => (prev > 0 ? prev - 1 : IFAB_LAWS_DATA.length - 1));
   };
 
   const handleNextLaw = () => {
-    sounds.playToastChime();
-    haptics.impactLight();
+    try { sounds?.playToastChime?.(); } catch {}
+    try { haptics?.impactLight?.(); } catch {}
+
+    if (filteredLaws.length > 0) {
+      const currentFilteredIdx = filteredLaws.findIndex(l => l.number === selectedLaw.number);
+      const nextFilteredIdx = currentFilteredIdx < filteredLaws.length - 1 ? currentFilteredIdx + 1 : 0;
+      const targetLawNumber = filteredLaws[nextFilteredIdx].number;
+      const targetGlobalIdx = IFAB_LAWS_DATA.findIndex(l => l.number === targetLawNumber);
+      if (targetGlobalIdx !== -1) {
+        setSelectedLawIndex(targetGlobalIdx);
+        return;
+      }
+    }
     setSelectedLawIndex((prev) => (prev < IFAB_LAWS_DATA.length - 1 ? prev + 1 : 0));
   };
 
   // Toggle de nivel colapsable
   const toggleLevel = (levelKey) => {
     setExpandedLevels(prev => ({ ...prev, [levelKey]: !prev[levelKey] }));
-    haptics.impactLight();
+    try { haptics?.impactLight?.(); } catch {}
+  };
+
+  const toggleAllLevels = () => {
+    const allExpanded = Object.values(expandedLevels).every(Boolean);
+    setExpandedLevels({
+      level1: !allExpanded,
+      level2: !allExpanded,
+      level3: !allExpanded,
+      table: !allExpanded
+    });
+    try { haptics?.impactLight?.(); } catch {}
   };
 
   // Quiz Simulator
@@ -309,20 +359,26 @@ export default function RefereeTab() {
     const isCorrect = currentCase.options[idx].isCorrect;
     if (isCorrect) {
       setQuizScore(prev => prev + 1);
-      sounds.playSuccessChime();
-      haptics.seriesDone();
+      try { sounds?.playSuccessChime?.(); } catch {}
+      try { haptics?.seriesDone?.(); } catch {}
       toast.success({
         title: '¡Decisión Arbitral Correcta!',
         message: 'Has aplicado con precisión el criterio IFAB.'
       });
     } else {
-      sounds.playAlarmBeep();
-      haptics.alarmVibration();
+      try { sounds?.playAlarmBeep?.(); } catch {}
+      try { haptics?.alarmVibration?.(); } catch {}
       toast.error({
         title: 'Criterio Incorrecto',
         message: 'Revisa la fundamentación reglamentaria de la jugada.'
       });
     }
+  };
+
+  const handlePrevCase = () => {
+    setSelectedOption(null);
+    setHasAnswered(false);
+    setCurrentCaseIndex((prev) => (prev > 0 ? prev - 1 : REFEREE_CASES.length - 1));
   };
 
   const handleNextCase = () => {
@@ -345,8 +401,6 @@ export default function RefereeTab() {
 
   // Estado actual de la regla en estudio
   const currentLawStatus = studyProgress[selectedLaw.number]?.status || (selectedLaw.number === 11 ? 'vista' : 'no_vista');
-  const currentStatusConfig = STUDY_STATUS_CONFIG[currentLawStatus] || STUDY_STATUS_CONFIG.no_vista;
-  const StatusIcon = currentStatusConfig.icon;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -486,8 +540,17 @@ export default function RefereeTab() {
                     placeholder="Buscar regla, palabra clave (fuera de juego, manos, joyas)..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="min-h-[44px] w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-2xs"
+                    className="min-h-[44px] w-full pl-9 pr-9 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-2xs"
                   />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-2.5 p-1 rounded-lg hover:bg-surface text-text-muted hover:text-text transition-colors"
+                      title="Borrar búsqueda"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
@@ -515,28 +578,45 @@ export default function RefereeTab() {
 
               {/* List of Laws */}
               <div className="space-y-2 max-h-[700px] overflow-y-auto pr-1">
-                {filteredLaws.map((law) => {
-                  const isSelected = selectedLaw.number === law.number;
-                  const lawIndex = IFAB_LAWS_DATA.findIndex(l => l.number === law.number);
-                  const lawStatus = studyProgress[law.number]?.status || (law.number === 11 ? 'vista' : 'no_vista');
-                  const statusCfg = STUDY_STATUS_CONFIG[lawStatus] || STUDY_STATUS_CONFIG.no_vista;
-                  const LawStatusIcon = statusCfg.icon;
-
-                  return (
+                {filteredLaws.length === 0 ? (
+                  <div className="p-6 text-center bg-surface border border-border rounded-xl space-y-3">
+                    <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto" />
+                    <p className="text-xs text-text-muted">
+                      No se encontraron reglas coincidentes con "{searchQuery}".
+                    </p>
                     <button
-                      key={law.number}
                       onClick={() => {
-                        setSelectedLawIndex(lawIndex);
-                        setMobileViewMode('detail');
-                        sounds.playToastChime();
-                        haptics.impactLight();
+                        setSearchQuery('');
+                        setCategoryFilter('all');
                       }}
-                      className={`min-h-[64px] w-full flex items-start justify-between p-3.5 rounded-xl border text-left transition-all ${
-                        isSelected
-                          ? 'bg-accent/10 border-accent shadow-xs ring-1 ring-accent/30'
-                          : 'bg-surface border-border hover:bg-surface-2 hover:border-border-subtle'
-                      }`}
+                      className="min-h-[36px] px-3.5 py-1.5 rounded-lg bg-surface-2 hover:bg-surface border border-border text-xs font-bold text-accent transition-colors"
                     >
+                      Restablecer filtros
+                    </button>
+                  </div>
+                ) : (
+                  filteredLaws.map((law) => {
+                    const isSelected = selectedLaw.number === law.number;
+                    const lawIndex = IFAB_LAWS_DATA.findIndex(l => l.number === law.number);
+                    const lawStatus = studyProgress[law.number]?.status || (law.number === 11 ? 'vista' : 'no_vista');
+                    const statusCfg = STUDY_STATUS_CONFIG[lawStatus] || STUDY_STATUS_CONFIG.no_vista;
+                    const LawStatusIcon = statusCfg.icon;
+
+                    return (
+                      <button
+                        key={law.number}
+                        onClick={() => {
+                          setSelectedLawIndex(lawIndex);
+                          setMobileViewMode('detail');
+                          try { sounds?.playToastChime?.(); } catch {}
+                          try { haptics?.impactLight?.(); } catch {}
+                        }}
+                        className={`min-h-[64px] w-full flex items-start justify-between p-3.5 rounded-xl border text-left transition-all ${
+                          isSelected
+                            ? 'bg-accent/10 border-accent shadow-xs ring-1 ring-accent/30'
+                            : 'bg-surface border-border hover:bg-surface-2 hover:border-border-subtle'
+                        }`}
+                      >
                       <div className="flex items-start gap-3 min-w-0">
                         {/* Number Box */}
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0 mt-0.5 ${
@@ -585,7 +665,7 @@ export default function RefereeTab() {
                       }`} />
                     </button>
                   );
-                })}
+                }))}
               </div>
             </div>
 
@@ -637,21 +717,58 @@ export default function RefereeTab() {
                   </div>
 
                   {/* Study Status Action Bar */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 bg-surface-2/60 p-3 rounded-xl border border-border">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-text-muted font-medium">Estado actual:</span>
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${currentStatusConfig.badgeClass}`}>
-                        <StatusIcon className="w-3.5 h-3.5" />
-                        {currentStatusConfig.label}
-                      </span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 bg-surface-2/60 p-3.5 rounded-xl border border-border">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-text-muted font-medium text-xs">Estado:</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {Object.entries(STUDY_STATUS_CONFIG).map(([key, cfg]) => {
+                          const isCurrent = currentLawStatus === key;
+                          const IconComp = cfg.icon;
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => handleSetRuleStatus(selectedLaw.number, key)}
+                              className={`min-h-[36px] flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                                isCurrent
+                                  ? `${cfg.badgeClass} ring-1 ring-current shadow-xs scale-105`
+                                  : 'bg-surface text-text-muted border-border hover:text-text hover:bg-surface-2'
+                              }`}
+                              title={`Marcar regla como ${cfg.label}`}
+                            >
+                              <IconComp className="w-3.5 h-3.5" />
+                              <span>{cfg.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     <button
                       onClick={() => handleToggleStudyStatus(selectedLaw.number)}
-                      className="min-h-[44px] flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-slate-950 hover:opacity-95 font-black text-xs transition-transform active:scale-95 shadow-xs"
+                      className="min-h-[40px] flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-accent text-slate-950 hover:opacity-95 font-black text-xs transition-transform active:scale-95 shadow-xs whitespace-nowrap self-stretch sm:self-auto"
                     >
                       <Check className="w-4 h-4" />
-                      <span>Marcar como estudiada</span>
+                      <span>
+                        {currentLawStatus === 'no_vista' ? 'Avanzar a Vista' :
+                         currentLawStatus === 'vista' ? 'Avanzar a Practicada' :
+                         currentLawStatus === 'practicada' ? 'Avanzar a Dominada' :
+                         'Reiniciar a No vista'}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Quick Expand/Collapse All Accordions */}
+                  <div className="flex items-center justify-end pt-1">
+                    <button
+                      onClick={toggleAllLevels}
+                      className="text-[11px] font-bold text-accent hover:underline flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-accent-subtle transition-colors"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>
+                        {Object.values(expandedLevels).every(Boolean)
+                          ? 'Colapsar todas las secciones'
+                          : 'Desplegar todas las secciones'}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -961,20 +1078,31 @@ export default function RefereeTab() {
             </AnimatePresence>
 
             {/* Bottom Actions */}
-            <div className="flex items-center justify-between pt-4 border-t border-border">
-              <button
-                onClick={handleResetQuiz}
-                className="min-h-[44px] flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-text-muted hover:text-text hover:bg-surface-2 transition-colors"
-              >
-                <RotateCcw className="w-3.5 h-3.5" /> Reiniciar Test
-              </button>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-border">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleResetQuiz}
+                  className="min-h-[44px] flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-text-muted hover:text-text hover:bg-surface-2 border border-transparent hover:border-border transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Reiniciar Test
+                </button>
+
+                {currentCaseIndex > 0 && (
+                  <button
+                    onClick={handlePrevCase}
+                    className="min-h-[44px] flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-text-muted hover:text-text hover:bg-surface-2 border border-border transition-colors"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" /> Caso Anterior
+                  </button>
+                )}
+              </div>
 
               {hasAnswered && (
                 <button
                   onClick={handleNextCase}
                   className="min-h-[44px] flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent hover:opacity-95 text-slate-950 font-black text-xs transition-colors shadow-xs"
                 >
-                  Siguiente Jugada
+                  <span>{currentCaseIndex === REFEREE_CASES.length - 1 ? 'Finalizar / Repetir' : 'Siguiente Jugada'}</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               )}
@@ -1091,23 +1219,42 @@ export default function RefereeTab() {
           <div
             onClick={() => {
               setIsFlipped(!isFlipped);
-              sounds.playToastChime();
+              try { sounds?.playToastChime?.(); } catch {}
+              try { haptics?.impactLight?.(); } catch {}
             }}
-            className="cursor-pointer min-h-[260px] p-6 sm:p-8 rounded-2xl bg-surface border-2 border-accent/40 shadow-lg flex flex-col items-center justify-center text-center space-y-4 hover:border-accent transition-all select-none"
+            className="cursor-pointer min-h-[280px] p-6 sm:p-8 rounded-2xl bg-surface border-2 border-accent/40 shadow-lg flex flex-col items-center justify-center text-center space-y-3 hover:border-accent transition-all select-none"
           >
             <span className="text-[10px] font-black uppercase tracking-wider text-accent bg-accent-subtle px-3 py-1 rounded-full border border-accent/30">
-              {isFlipped ? 'RESPUESTA Y CRITERIO IFAB' : 'PREGUNTA ARBITRAL RÁPIDA'}
+              {REFEREE_CASES[flashcardIndex].category} · {isFlipped ? 'RESPUESTA Y CRITERIO IFAB' : 'PREGUNTA ARBITRAL'}
             </span>
 
-            <div className="text-base sm:text-lg font-black text-text leading-relaxed">
-              {isFlipped
-                ? REFEREE_CASES[flashcardIndex].options.find(o => o.isCorrect)?.text
-                : REFEREE_CASES[flashcardIndex].situation}
-            </div>
+            {isFlipped ? (
+              <div className="space-y-3 max-w-md">
+                <div className="text-base sm:text-lg font-black text-emerald-400 leading-snug">
+                  ✔ {REFEREE_CASES[flashcardIndex].options.find(o => o.isCorrect)?.text}
+                </div>
+                <div className="text-xs text-text-muted bg-surface-2/80 p-3 rounded-xl border border-border leading-relaxed text-left">
+                  <span className="font-bold text-accent block text-[11px] mb-1">Fundamentación IFAB:</span>
+                  {REFEREE_CASES[flashcardIndex].explanation}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 max-w-md">
+                <h3 className="text-base font-extrabold text-text">
+                  {REFEREE_CASES[flashcardIndex].title}
+                </h3>
+                <p className="text-xs sm:text-sm text-text-muted leading-relaxed">
+                  {REFEREE_CASES[flashcardIndex].situation}
+                </p>
+                <p className="text-xs sm:text-sm font-bold text-accent pt-1">
+                  ❓ {REFEREE_CASES[flashcardIndex].question}
+                </p>
+              </div>
+            )}
 
-            <p className="text-[11px] text-text-muted flex items-center gap-1">
+            <p className="text-[11px] text-text-muted flex items-center gap-1 pt-1">
               <Eye className="w-3.5 h-3.5 text-accent" />
-              {isFlipped ? 'Toca para volver a la pregunta' : 'Toca para ver el criterio reglamentario'}
+              {isFlipped ? 'Toca para volver a la situación' : 'Toca para ver el criterio reglamentario'}
             </p>
           </div>
 
@@ -1116,6 +1263,8 @@ export default function RefereeTab() {
               onClick={() => {
                 setIsFlipped(false);
                 setFlashcardIndex(prev => (prev === 0 ? REFEREE_CASES.length - 1 : prev - 1));
+                try { sounds?.playToastChime?.(); } catch {}
+                try { haptics?.impactLight?.(); } catch {}
               }}
               className="min-h-[44px] px-4 py-2 rounded-xl bg-surface-2 hover:bg-surface border border-border text-xs font-bold text-text transition-colors"
             >
@@ -1130,6 +1279,8 @@ export default function RefereeTab() {
               onClick={() => {
                 setIsFlipped(false);
                 setFlashcardIndex(prev => (prev + 1) % REFEREE_CASES.length);
+                try { sounds?.playToastChime?.(); } catch {}
+                try { haptics?.impactLight?.(); } catch {}
               }}
               className="min-h-[44px] px-4 py-2 rounded-xl bg-accent hover:opacity-95 text-slate-950 text-xs font-black transition-colors shadow-xs"
             >

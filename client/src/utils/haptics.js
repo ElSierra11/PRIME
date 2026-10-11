@@ -59,6 +59,26 @@ export const haptics = {
     localStorage.setItem(KEY, val ? 'true' : 'false');
   },
 
+  /** Toque suave para botones y navegación */
+  impactLight() {
+    fire(35);
+  },
+
+  /** Toque medio para confirmaciones de acción */
+  impactMedium() {
+    fire(60);
+  },
+
+  /** Toque firme para acciones destacadas */
+  impactHeavy() {
+    fire(100);
+  },
+
+  /** Vibración de advertencia o respuesta incorrecta */
+  alarmVibration() {
+    fire([90, 50, 90, 50, 120]);
+  },
+
   /** Serie completada en WorkoutTab — pulso corto */
   seriesDone() {
     fire(70);

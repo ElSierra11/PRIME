@@ -33,6 +33,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 
+const EMPTY_LIST = [];
+
 export default function ScheduleTab({
   scheduleDayData,
   selectedDay,
@@ -189,8 +191,8 @@ export default function ScheduleTab({
     return raw.filter((ev) => ev.category === activeCategoryFilter);
   }, [scheduleDayData, activeCategoryFilter]);
 
-  const conflicts = scheduleDayData?.conflicts || [];
-  const freeSlots = scheduleDayData?.freeSlots || [];
+  const conflicts = scheduleDayData?.conflicts || EMPTY_LIST;
+  const freeSlots = scheduleDayData?.freeSlots || EMPTY_LIST;
 
   const conflictEventIds = useMemo(() => {
     const set = new Set();

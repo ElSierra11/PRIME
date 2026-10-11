@@ -144,6 +144,31 @@ class SoundEngine {
       console.warn('Audio error:', e);
     }
   }
+
+  playAlarmBeep() {
+    try {
+      this.init();
+      if (!this.ctx || this.ctx.state === 'suspended') return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(260, now);
+      osc.frequency.exponentialRampToValueAtTime(130, now + 0.22);
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.22);
+    } catch (e) {
+      console.warn('Audio error:', e);
+    }
+  }
 }
 
 export const sounds = new SoundEngine();
