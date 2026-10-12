@@ -216,12 +216,17 @@ const server = http.createServer(async (req, res) => {
       const result = await financeService.addSaving(body);
       return sendResponse(res, 200, result);
     }
+    if (pathname === '/api/finance/expense' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const result = await financeService.addExpense(body);
+      return sendResponse(res, 200, result);
+    }
     if (pathname === '/api/finance/update-goals' && req.method === 'POST') {
       const body = await parseJsonBody(req);
       const result = await financeService.updateGoals(body);
       return sendResponse(res, 200, result);
     }
-    if (pathname.startsWith('/api/finance/saving/') && req.method === 'DELETE') {
+    if ((pathname.startsWith('/api/finance/saving/') || pathname.startsWith('/api/finance/expense/') || pathname.startsWith('/api/finance/record/')) && req.method === 'DELETE') {
       const id = pathname.split('/').pop();
       const result = await financeService.deleteSaving(id);
       return sendResponse(res, 200, result);

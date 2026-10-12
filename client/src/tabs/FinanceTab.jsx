@@ -10,6 +10,7 @@ import {
   Shield,
   X,
   TrendingUp,
+  TrendingDown,
   Clock,
   ChevronRight,
   Trophy,
@@ -19,7 +20,12 @@ import {
   Trash2,
   Plus,
   Minus,
-  Save
+  Save,
+  Receipt,
+  ArrowUpRight,
+  ArrowDownRight,
+  Filter,
+  Check
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import AnimatedNumber from '../components/AnimatedNumber';
@@ -44,22 +50,54 @@ const formatShortCOP = (val) => {
   return `$${val}`;
 };
 
+const CATEGORY_LABELS = {
+  food: 'Comida',
+  transport: 'Transporte',
+  social: 'Salida / Social',
+  study: 'Universidad / Tesis',
+  essential: 'Fijo / Esencial',
+  impulse: 'Antojo / Impulso',
+  ahorro: 'Ahorro',
+  arbitraje: 'Arbitraje',
+  outlier: 'Outlier',
+  extra: 'Ingreso Extra',
+  general: 'General',
+  gasto: 'Gasto'
+};
+
 /* ─── SVG Savings Chart ────────────────────────────────── */
-function SavingsChart({ records, goalCOP }) {
+function SavingsChart({ records, goalCOP, currentSaved }) {
   const W = 400, H = 140, PAD = { top: 16, right: 16, bottom: 28, left: 48 };
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
 
-  // Build cumulative savings points from records sorted by date
+  // Build cumulative savings points from records sorted chronologically
   const points = useMemo(() => {
-    if (!records || records.length === 0) return [];
-    const sorted = [...records].sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (!records || records.length === 0) {
+      if (currentSaved > 0) {
+        return [
+          { x: 0, y: 0, label: 'Inicio', amount: 0 },
+          { x: 1, y: currentSaved, label: 'Actual', amount: currentSaved }
+        ];
+      }
+      return [];
+    }
+    const chronological = [...records].reverse();
     let cumulative = 0;
-    return sorted.map((r, i) => {
-      cumulative += r.amountCOP || 0;
-      return { x: i, y: cumulative, label: r.date, amount: cumulative };
+    const pts = [{ x: 0, y: 0, label: 'Inicio', amount: 0 }];
+    chronological.forEach((r, idx) => {
+      const delta = r.type === 'expense' ? -(r.amountCOP || 0) : (r.amountCOP || 0);
+      cumulative = Math.max(0, cumulative + delta);
+      pts.push({
+        x: idx + 1,
+        y: cumulative,
+        label: r.date || `Mov #${idx + 1}`,
+        amount: cumulative,
+        type: r.type
+      });
     });
-  }, [records]);
+    return pts;
+  }, [records, currentSaved]);
 
   if (points.length < 2) {
     return (
@@ -191,6 +229,7 @@ export default function FinanceTab({
   financeOverview,
   onEvaluateExpense,
   onAddSaving,
+  onAddExpense,
   onUpdateGoals,
   onDeleteSaving,
   addToast: legacyAddToast
@@ -203,10 +242,30 @@ export default function FinanceTab({
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [goalReached, setGoalReached] = useState(false);
-  const [isEditGoalsModalOpen, setIsEditGoalsModalOpen] = useState(false);
+
+  /* ─── Unified Action Modal State (Savings / Expenses / Goals) ─── */
+  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+  const [actionTab, setActionTab] = useState('saving'); // 'saving' | 'expense' | 'goals'
+
+  // Direct Saving State
+  const [saveAmountInput, setSaveAmountInput] = useState('');
+  const [saveTitleInput, setSaveTitleInput] = useState('');
+  const [saveCategoryInput, setSaveCategoryInput] = useState('ahorro');
+  const [isSubmittingSaving, setIsSubmittingSaving] = useState(false);
+
+  // Direct Expense State
+  const [expenseDirectAmount, setExpenseDirectAmount] = useState('');
+  const [expenseDirectTitle, setExpenseDirectTitle] = useState('');
+  const [expenseDirectCategory, setExpenseDirectCategory] = useState('food');
+  const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
+
+  // Goal & Saved Edit State
   const [editSavedInput, setEditSavedInput] = useState('');
   const [editGoalInput, setEditGoalInput] = useState('');
   const [isSavingGoals, setIsSavingGoals] = useState(false);
+
+  // Filter state for records
+  const [recordsFilter, setRecordsFilter] = useState('all'); // 'all' | 'savings' | 'expenses'
   const drawerRef = useRef(null);
 
   /* ─── Data ── */
@@ -235,9 +294,90 @@ export default function FinanceTab({
         message: 'Tus metas de ahorro han sido guardadas correctamente.',
         category: 'finance'
       });
-      setIsEditGoalsModalOpen(false);
+      setIsActionModalOpen(false);
     } finally {
       setIsSavingGoals(false);
+    }
+  };
+
+  /* ─── Direct Add Saving ─── */
+  const handleDirectAddSaving = async (e) => {
+    e?.preventDefault();
+    const amount = parseFloat(saveAmountInput);
+    if (isNaN(amount) || amount <= 0) {
+      toast.warning({ title: 'Monto requerido', message: 'Ingresa un valor positivo a ahorrar.' });
+      return;
+    }
+    const title = saveTitleInput.trim() || 'Ahorro ingresado';
+    setIsSubmittingSaving(true);
+    try {
+      if (onAddSaving) {
+        await onAddSaving({
+          title,
+          amountCOP: amount,
+          category: saveCategoryInput,
+          type: 'saving'
+        });
+      }
+      sounds.playSuccessChime();
+      if (currentSaved + amount >= goalCOP) {
+        launchConfetti();
+      }
+      toast.success({
+        title: '¡Ahorro registrado!',
+        message: `+${formatCOP(amount)} sumados a tu saldo mensual.`,
+        category: 'finance'
+      });
+      setSaveAmountInput('');
+      setSaveTitleInput('');
+      setIsActionModalOpen(false);
+    } catch (err) {
+      toast.error({ title: 'Error', message: 'No se pudo guardar el ahorro.' });
+    } finally {
+      setIsSubmittingSaving(false);
+    }
+  };
+
+  /* ─── Direct Add Expense ─── */
+  const handleDirectAddExpense = async (e) => {
+    e?.preventDefault();
+    const amount = parseFloat(expenseDirectAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.warning({ title: 'Monto requerido', message: 'Ingresa un valor de gasto válido.' });
+      return;
+    }
+    const title = expenseDirectTitle.trim() || 'Gasto realizado';
+    setIsSubmittingExpense(true);
+    try {
+      if (onAddExpense) {
+        await onAddExpense({
+          title,
+          amountCOP: amount,
+          category: expenseDirectCategory,
+          type: 'expense'
+        });
+      } else if (onAddSaving) {
+        await onAddSaving({
+          title,
+          amountCOP: amount,
+          category: expenseDirectCategory,
+          type: 'expense'
+        });
+      }
+      sounds.playToastChime();
+      const hours = (amount / (ratePerHour * COP_RATE)).toFixed(1);
+      toast.info({
+        title: 'Gasto registrado',
+        message: `-${formatCOP(amount)} descontados de tu saldo (~${hours}h Outlier).`,
+        category: 'finance'
+      });
+      setExpenseDirectAmount('');
+      setExpenseDirectTitle('');
+      setIsActionModalOpen(false);
+    } catch (err) {
+      toast.error({ title: 'Error', message: 'No se pudo registrar el gasto.' });
+    } finally {
+      setIsSubmittingExpense(false);
     }
   };
 
@@ -279,14 +419,50 @@ export default function FinanceTab({
     }
   };
 
-  /* ─── Save handler ── */
+  /* ─── Save decision from Auditor ── */
   const handleChooseToSave = () => {
     if (!evaluationResult) return;
-    onAddSaving({ title: `Ahorrado: ${evaluationResult.name}`, amountCOP: evaluationResult.amountCOP });
+    onAddSaving({
+      title: `Ahorrado: ${evaluationResult.name}`,
+      amountCOP: evaluationResult.amountCOP,
+      type: 'saving',
+      category: 'ahorro'
+    });
     sounds.playSuccessChime();
     toast.success({
       title: 'Decisión Prime Registrada',
       message: `+${formatCOP(evaluationResult.amountCOP)} sumados a tu meta mensual.`,
+      category: 'finance'
+    });
+    setEvaluationResult(null);
+    setExpenseName('');
+    setExpenseAmount('');
+  };
+
+  /* ─── Spend decision from Auditor ── */
+  const handleChooseToSpend = async () => {
+    if (!evaluationResult) return;
+    const amount = parseFloat(evaluationResult.amountCOP);
+    const title = `Gasto: ${evaluationResult.name}`;
+    if (onAddExpense) {
+      await onAddExpense({
+        title,
+        amountCOP: amount,
+        category: evaluationResult.category,
+        type: 'expense'
+      });
+    } else if (onAddSaving) {
+      await onAddSaving({
+        title,
+        amountCOP: amount,
+        category: evaluationResult.category,
+        type: 'expense'
+      });
+    }
+    sounds.playToastChime();
+    toast.warning({
+      title: 'Gasto computado en tu saldo',
+      message: `-${formatCOP(amount)} descontados de tu ahorro mensual.`,
       category: 'finance'
     });
     setEvaluationResult(null);
@@ -310,7 +486,22 @@ export default function FinanceTab({
   /* ─── Bar color ── */
   const barColor = percent >= 100 ? 'bg-success' : percent >= 75 ? 'bg-accent' : percent >= 50 ? 'bg-accent' : 'bg-warning';
 
-  const displayRecords = records.slice(0, 3);
+  /* ─── Records filtering and totals ── */
+  const filteredRecords = useMemo(() => {
+    if (recordsFilter === 'savings') return records.filter(r => r.type !== 'expense');
+    if (recordsFilter === 'expenses') return records.filter(r => r.type === 'expense');
+    return records;
+  }, [records, recordsFilter]);
+
+  const displayRecords = filteredRecords.slice(0, 4);
+
+  const totalSavedFromRecords = useMemo(() => {
+    return records.filter(r => r.type !== 'expense').reduce((s, r) => s + (r.amountCOP || 0), 0);
+  }, [records]);
+
+  const totalSpentFromRecords = useMemo(() => {
+    return records.filter(r => r.type === 'expense').reduce((s, r) => s + (r.amountCOP || 0), 0);
+  }, [records]);
 
   /* ─── Render ─────────────────────────────────────────── */
   return (
@@ -334,28 +525,61 @@ export default function FinanceTab({
             </p>
           </div>
 
-          {/* Saved amount chip */}
-          <div className="flex flex-col items-end shrink-0">
-            <span className="text-[11px] text-text-muted font-bold uppercase tracking-wide">Ahorrado este mes</span>
-            <span className="font-mono text-3xl font-black text-text tabular-nums leading-tight mt-0.5">
-              <AnimatedNumber value={currentSaved} format="cop" duration={1000} className="text-text" />
-            </span>
-            <span className="text-[11px] text-text-muted font-mono tabular-nums">
-              de {formatCOP(goalCOP)} ({percent}%)
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setEditSavedInput(String(currentSaved));
-                setEditGoalInput(String(goalCOP));
-                setIsEditGoalsModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-subtle hover:bg-accent/20 border border-accent/30 text-xs font-bold text-accent transition-colors mt-2 shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              title="Modificar cuánto tengo ahorrado actualmente y meta mensual"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-accent" />
-              Modificar Ahorro / Meta
-            </button>
+          {/* Saved amount chip and actions */}
+          <div className="flex flex-col sm:items-end shrink-0 gap-2">
+            <div>
+              <span className="text-[11px] text-text-muted font-bold uppercase tracking-wide block sm:text-right">Ahorrado este mes</span>
+              <span className="font-mono text-3xl font-black text-text tabular-nums leading-tight mt-0.5 block sm:text-right">
+                <AnimatedNumber value={currentSaved} format="cop" duration={1000} className="text-text" />
+              </span>
+              <span className="text-[11px] text-text-muted font-mono tabular-nums block sm:text-right">
+                de {formatCOP(goalCOP)} ({percent}%)
+              </span>
+            </div>
+
+            {/* Quick Action buttons */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setActionTab('saving');
+                  setIsActionModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-success/15 hover:bg-success/25 border border-success/40 text-xs font-black text-success transition-all shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
+                title="Ingresar una cantidad de dinero para ahorrar"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Ingresar Ahorro
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActionTab('expense');
+                  setIsActionModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-danger/10 hover:bg-danger/20 border border-danger/30 text-xs font-black text-danger transition-all shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
+                title="Registrar un gasto que hayas realizado"
+              >
+                <Minus className="w-3.5 h-3.5" />
+                Registrar Gasto
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditSavedInput(String(currentSaved));
+                  setEditGoalInput(String(goalCOP));
+                  setActionTab('goals');
+                  setIsActionModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-2 hover:bg-surface border border-border text-xs font-bold text-text-muted hover:text-text transition-colors shadow-2xs"
+                title="Modificar cuánto tengo ahorrado actualmente y meta mensual"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-accent" />
+                <span className="hidden sm:inline">Meta / Saldo</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -556,16 +780,23 @@ export default function FinanceTab({
                 <p className="text-xs text-text-muted leading-relaxed">{evaluationResult.message}</p>
 
                 {/* Action buttons */}
-                <div className="flex items-center gap-2.5 pt-1">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
                   <button
                     onClick={handleChooseToSave}
-                    className="flex-1 py-3 px-4 rounded-xl bg-success hover:opacity-90 text-slate-950 font-black text-xs transition-all flex items-center justify-center gap-1.5 min-h-[48px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success shadow-xs active:scale-[0.97]"
+                    className="flex-1 py-3 px-3 rounded-xl bg-success hover:opacity-90 text-slate-950 font-black text-xs transition-all flex items-center justify-center gap-1.5 min-h-[46px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success shadow-xs active:scale-[0.97]"
                   >
                     <PiggyBank className="w-4 h-4" /> Decido Ahorrarlo
                   </button>
                   <button
+                    onClick={handleChooseToSpend}
+                    className="flex-1 py-3 px-3 rounded-xl bg-danger/15 hover:bg-danger/25 text-danger border border-danger/30 font-bold text-xs transition-all flex items-center justify-center gap-1.5 min-h-[46px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger active:scale-[0.97]"
+                    title="Gasto confirmado: descontar de mi balance"
+                  >
+                    <Minus className="w-4 h-4" /> Registrar como Gasto
+                  </button>
+                  <button
                     onClick={() => setEvaluationResult(null)}
-                    className="py-3 px-4 rounded-xl bg-surface hover:bg-surface-2 text-text-muted hover:text-text border-2 border-border text-xs font-semibold transition-colors min-h-[48px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="py-3 px-3 rounded-xl bg-surface hover:bg-surface-2 text-text-muted hover:text-text border border-border text-xs font-semibold transition-colors min-h-[46px]"
                   >
                     Descartar
                   </button>
@@ -591,7 +822,7 @@ export default function FinanceTab({
           </AnimatePresence>
         </section>
 
-        {/* ── Right Column: Chart + Victories ────────────── */}
+        {/* ── Right Column: Chart + Movements ────────────── */}
         <div className="space-y-6">
 
           {/* SVG Savings Chart */}
@@ -610,7 +841,7 @@ export default function FinanceTab({
               )}
             </div>
 
-            <SavingsChart records={records} goalCOP={goalCOP} />
+            <SavingsChart records={records} goalCOP={goalCOP} currentSaved={currentSaved} />
 
             {/* Quick stat row below chart */}
             <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border">
@@ -627,28 +858,64 @@ export default function FinanceTab({
             </div>
           </section>
 
-          {/* Savings Victories */}
+          {/* Movimientos y Victorias */}
           <section
-            aria-labelledby="victories-heading"
+            aria-labelledby="movements-heading"
             className="bg-surface border border-border p-5 rounded-2xl shadow-xs space-y-3"
           >
-            <div className="flex items-center justify-between">
-              <h2 id="victories-heading" className="text-sm font-bold text-text flex items-center gap-2">
-                <Zap className="w-4 h-4 text-accent" /> Victorias de Ahorro
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h2 id="movements-heading" className="text-sm font-bold text-text flex items-center gap-2">
+                <Zap className="w-4 h-4 text-accent" /> Movimientos y Victorias
               </h2>
-              {records.length > 3 && (
-                <button
-                  onClick={() => setIsDrawerOpen(true)}
-                  className="text-xs font-bold text-accent hover:text-accent-hover flex items-center gap-1 min-h-[36px] transition-colors focus-visible:outline-none focus-visible:underline"
-                >
-                  Ver todas ({records.length}) <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                {/* Filter pills */}
+                <div className="inline-flex p-0.5 rounded-lg bg-surface-2 border border-border text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setRecordsFilter('all')}
+                    className={`px-2 py-0.5 rounded-md transition-colors ${
+                      recordsFilter === 'all' ? 'bg-surface text-text shadow-2xs' : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecordsFilter('savings')}
+                    className={`px-2 py-0.5 rounded-md transition-colors ${
+                      recordsFilter === 'savings' ? 'bg-success/20 text-success' : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    Ahorros
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecordsFilter('expenses')}
+                    className={`px-2 py-0.5 rounded-md transition-colors ${
+                      recordsFilter === 'expenses' ? 'bg-danger/20 text-danger' : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    Gastos
+                  </button>
+                </div>
+                {records.length > 4 && (
+                  <button
+                    onClick={() => setIsDrawerOpen(true)}
+                    className="text-xs font-bold text-accent hover:text-accent-hover flex items-center gap-0.5 ml-1 transition-colors"
+                  >
+                    Ver ({records.length}) <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {records.length === 0 ? (
+            {displayRecords.length === 0 ? (
               <div className="py-6 text-center text-xs text-text-muted italic">
-                Tus victorias de ahorro aparecerán aquí cuando evalúes y decidas no gastar.
+                {recordsFilter === 'all'
+                  ? 'Tus ahorros y gastos registrados aparecerán aquí.'
+                  : recordsFilter === 'savings'
+                  ? 'Aún no has registrado victorias de ahorro en este filtro.'
+                  : 'No tienes gastos registrados en esta categoría.'}
               </div>
             ) : (
               <motion.div
@@ -657,38 +924,74 @@ export default function FinanceTab({
                 variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07 } } }}
                 className="space-y-2"
               >
-                {displayRecords.map((rec, i) => (
-                  <motion.div
-                    key={rec.id || i}
-                    variants={{
-                      hidden: { opacity: 0, x: -12 },
-                      show: { opacity: 1, x: 0, transition: { duration: 0.22, ease: 'easeOut' } }
-                    }}
-                    className="flex items-center justify-between p-3.5 rounded-xl bg-surface-2 border border-border hover:border-success/30 hover:bg-success/5 transition-all"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-7 h-7 rounded-full bg-success/15 flex items-center justify-center shrink-0">
-                        <PiggyBank className="w-4 h-4 text-success" />
-                      </span>
-                      <div className="min-w-0">
-                        <span className="font-bold text-text text-xs block truncate">{rec.title}</span>
-                        <span className="text-[11px] text-text-muted font-mono">{rec.date}</span>
+                {displayRecords.map((rec, i) => {
+                  const isExp = rec.type === 'expense';
+                  return (
+                    <motion.div
+                      key={rec.id || i}
+                      variants={{
+                        hidden: { opacity: 0, x: -12 },
+                        show: { opacity: 1, x: 0, transition: { duration: 0.22, ease: 'easeOut' } }
+                      }}
+                      className={`flex items-center justify-between p-3.5 rounded-xl bg-surface-2 border transition-all ${
+                        isExp
+                          ? 'border-border hover:border-danger/30 hover:bg-danger/5'
+                          : 'border-border hover:border-success/30 hover:bg-success/5'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                            isExp ? 'bg-danger/15 text-danger' : 'bg-success/15 text-success'
+                          }`}
+                        >
+                          {isExp ? <ArrowDownRight className="w-4 h-4" /> : <PiggyBank className="w-4 h-4" />}
+                        </span>
+                        <div className="min-w-0">
+                          <span className="font-bold text-text text-xs block truncate">{rec.title}</span>
+                          <span className="text-[11px] text-text-muted font-mono flex items-center gap-1.5 mt-0.5">
+                            <span>{rec.date}</span>
+                            <span>·</span>
+                            <span className="capitalize">{CATEGORY_LABELS[rec.category] || rec.category || (isExp ? 'Gasto' : 'Ahorro')}</span>
+                            {isExp && (
+                              <span className="text-[10px] text-warning font-bold">
+                                (~{(rec.amountCOP / (ratePerHour * COP_RATE)).toFixed(1)}h Outlier)
+                              </span>
+                            )}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <span className="font-mono font-black text-success tabular-nums text-xs shrink-0 ml-2">
-                      +{formatCOP(rec.amountCOP)}
-                    </span>
-                  </motion.div>
-                ))}
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <span
+                          className={`font-mono font-black tabular-nums text-xs ${
+                            isExp ? 'text-danger' : 'text-success'
+                          }`}
+                        >
+                          {isExp ? `-${formatCOP(rec.amountCOP)}` : `+${formatCOP(rec.amountCOP)}`}
+                        </span>
+                        {onDeleteSaving && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteSaving(rec.id)}
+                            className="p-1.5 text-text-muted hover:text-danger rounded-lg hover:bg-danger-subtle/30 transition-colors"
+                            title="Eliminar movimiento"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </motion.div>
             )}
 
-            {records.length > 3 && (
+            {records.length > 4 && (
               <button
                 onClick={() => setIsDrawerOpen(true)}
                 className="w-full py-2.5 rounded-xl border-2 border-dashed border-border hover:border-accent/40 text-xs font-bold text-text-muted hover:text-accent transition-colors min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
-                Ver todas las victorias ({records.length}) →
+                Ver todos los movimientos ({records.length}) →
               </button>
             )}
           </section>
@@ -733,61 +1036,143 @@ export default function FinanceTab({
               <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
                 <h2 id="drawer-heading" className="text-base font-black text-text flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-accent" />
-                  Todas las Victorias de Ahorro ({records.length})
+                  Historial de Movimientos ({records.length})
                 </h2>
                 <button
                   onClick={() => setIsDrawerOpen(false)}
-                  aria-label="Cerrar panel de victorias"
+                  aria-label="Cerrar panel de movimientos"
                   className="p-2 rounded-xl text-text-muted hover:text-text hover:bg-surface-2 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Drawer total */}
-              <div className="px-5 py-3 bg-success-subtle border-b border-success/20 shrink-0">
-                <span className="text-xs text-text-muted font-bold">Total ahorrado mediante decisiones Prime:</span>
-                <span className="font-mono font-black text-success text-lg tabular-nums ml-2">
-                  {formatCOP(records.reduce((s, r) => s + (r.amountCOP || 0), 0))}
-                </span>
+              {/* Drawer totals summary */}
+              <div className="px-5 py-3 bg-surface-2 border-b border-border shrink-0 grid grid-cols-3 gap-2">
+                <div className="p-2.5 rounded-xl bg-success-subtle border border-success/20">
+                  <span className="text-[10px] text-text-muted font-bold uppercase block">Total Ahorrado</span>
+                  <span className="font-mono font-black text-success text-sm tabular-nums">
+                    +{formatShortCOP(totalSavedFromRecords)}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-danger/10 border border-danger/20">
+                  <span className="text-[10px] text-text-muted font-bold uppercase block">Total Gastado</span>
+                  <span className="font-mono font-black text-danger text-sm tabular-nums">
+                    -{formatShortCOP(totalSpentFromRecords)}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-accent-subtle border border-accent/20">
+                  <span className="text-[10px] text-text-muted font-bold uppercase block">Saldo Actual</span>
+                  <span className="font-mono font-black text-accent text-sm tabular-nums">
+                    {formatShortCOP(currentSaved)}
+                  </span>
+                </div>
               </div>
 
-              {/* Scrollable list — no nested scroll, drawer IS the scroll container */}
+              {/* Drawer filter tabs */}
+              <div className="px-5 py-2.5 border-b border-border flex items-center justify-between bg-surface shrink-0">
+                <div className="inline-flex p-0.5 rounded-lg bg-surface-2 border border-border text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setRecordsFilter('all')}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      recordsFilter === 'all' ? 'bg-surface text-text shadow-2xs' : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    Todos ({records.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecordsFilter('savings')}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      recordsFilter === 'savings' ? 'bg-success/20 text-success' : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    Ahorros ({records.filter(r => r.type !== 'expense').length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecordsFilter('expenses')}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      recordsFilter === 'expenses' ? 'bg-danger/20 text-danger' : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    Gastos ({records.filter(r => r.type === 'expense').length})
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDrawerOpen(false);
+                    setActionTab('saving');
+                    setIsActionModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-accent hover:bg-accent-hover text-slate-950 text-xs font-black transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Nuevo Movimiento
+                </button>
+              </div>
+
+              {/* Scrollable list */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2 pb-safe">
-                {records.length === 0 ? (
-                  <p className="text-xs text-text-muted text-center py-8 italic">Sin victorias registradas todavía.</p>
+                {filteredRecords.length === 0 ? (
+                  <p className="text-xs text-text-muted text-center py-8 italic">Sin movimientos en esta categoría.</p>
                 ) : (
-                  records.map((rec, i) => (
-                    <div
-                      key={rec.id || i}
-                      className="flex items-center justify-between p-3.5 rounded-xl bg-surface-2 border border-border"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-8 h-8 rounded-full bg-success/15 flex items-center justify-center shrink-0 text-xs font-black text-success">
-                          #{i + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <span className="font-bold text-text text-xs block">{rec.title}</span>
-                          <span className="text-[11px] text-text-muted font-mono">{rec.date}</span>
+                  filteredRecords.map((rec, i) => {
+                    const isExp = rec.type === 'expense';
+                    return (
+                      <div
+                        key={rec.id || i}
+                        className={`flex items-center justify-between p-3.5 rounded-xl bg-surface-2 border transition-colors ${
+                          isExp ? 'border-border hover:border-danger/30' : 'border-border hover:border-success/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-black ${
+                              isExp ? 'bg-danger/15 text-danger' : 'bg-success/15 text-success'
+                            }`}
+                          >
+                            {isExp ? <ArrowDownRight className="w-4 h-4" /> : <PiggyBank className="w-4 h-4" />}
+                          </span>
+                          <div className="min-w-0">
+                            <span className="font-bold text-text text-xs block truncate">{rec.title}</span>
+                            <span className="text-[11px] text-text-muted font-mono flex items-center gap-1.5">
+                              <span>{rec.date}</span>
+                              <span>·</span>
+                              <span className="capitalize">{CATEGORY_LABELS[rec.category] || rec.category || (isExp ? 'Gasto' : 'Ahorro')}</span>
+                              {isExp && (
+                                <span className="text-[10px] text-warning font-bold">
+                                  (~{(rec.amountCOP / (ratePerHour * COP_RATE)).toFixed(1)}h Outlier)
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <span
+                            className={`font-mono font-black tabular-nums text-xs ${
+                              isExp ? 'text-danger' : 'text-success'
+                            }`}
+                          >
+                            {isExp ? `-${formatCOP(rec.amountCOP)}` : `+${formatCOP(rec.amountCOP)}`}
+                          </span>
+                          {onDeleteSaving && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteSaving(rec.id)}
+                              className="p-1.5 text-text-muted hover:text-danger rounded-lg hover:bg-danger-subtle/30 transition-colors"
+                              title="Eliminar movimiento"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0 ml-3">
-                        <span className="font-mono font-black text-success tabular-nums text-xs">
-                          +{formatCOP(rec.amountCOP)}
-                        </span>
-                        {onDeleteSaving && (
-                          <button
-                            type="button"
-                            onClick={() => onDeleteSaving(rec.id)}
-                            className="p-1.5 text-text-muted hover:text-danger rounded-lg hover:bg-danger-subtle/30 transition-colors"
-                            title="Eliminar registro"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </motion.aside>
@@ -795,182 +1180,537 @@ export default function FinanceTab({
         )}
       </AnimatePresence>
 
-      {/* ─── Modal para Modificar Ahorro Actual y Metas ─── */}
-      {isEditGoalsModalOpen && (
+      {/* ─── Modal Unificado: Ingresar Ahorro / Registrar Gasto / Modificar Meta ─── */}
+      {isActionModalOpen && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-labelledby="edit-savings-title"
+          aria-labelledby="action-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setIsEditGoalsModalOpen(false);
+            if (e.target === e.currentTarget) setIsActionModalOpen(false);
           }}
         >
           <div className="bg-surface border border-border rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden text-text animate-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-5 border-b border-border bg-surface-2/40">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-accent-subtle border border-accent/30 flex items-center justify-center text-accent">
-                  <PiggyBank className="w-5 h-5" />
+            {/* Modal Header & Navigation Tabs */}
+            <div className="p-4 sm:p-5 border-b border-border bg-surface-2/40 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
+                    actionTab === 'saving'
+                      ? 'bg-success/15 border-success/30 text-success'
+                      : actionTab === 'expense'
+                      ? 'bg-danger/15 border-danger/30 text-danger'
+                      : 'bg-accent/15 border-accent/30 text-accent'
+                  }`}>
+                    {actionTab === 'saving' && <PiggyBank className="w-5 h-5" />}
+                    {actionTab === 'expense' && <TrendingDown className="w-5 h-5" />}
+                    {actionTab === 'goals' && <Edit3 className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h3 id="action-modal-title" className="text-base font-extrabold text-text">
+                      {actionTab === 'saving' && 'Ingresar Nuevo Ahorro'}
+                      {actionTab === 'expense' && 'Registrar Gasto Realizado'}
+                      {actionTab === 'goals' && 'Modificar Saldo Ahorrado & Meta'}
+                    </h3>
+                    <p className="text-xs text-text-muted">
+                      {actionTab === 'saving' && 'Suma dinero a tu meta mensual y mantén tu progreso al día.'}
+                      {actionTab === 'expense' && 'Resta gastos efectuados y vigila su costo en horas de Outlier.'}
+                      {actionTab === 'goals' && 'Actualiza tu balance real acumulado y meta mensual.'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 id="edit-savings-title" className="text-base font-extrabold text-text">
-                    Modificar Saldo Ahorrado & Meta
-                  </h3>
-                  <p className="text-xs text-text-muted">
-                    Actualiza tu balance real y ajusta tu objetivo mensual en COP.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditGoalsModalOpen(false)}
-                aria-label="Cerrar modal"
-                className="p-2 rounded-xl text-text-muted hover:text-text hover:bg-surface-2 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Form */}
-            <form onSubmit={handleSaveGoals} className="p-5 sm:p-6 space-y-5">
-              {/* Field 1: Saldo Ahorrado Actual */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="edit-saved-amount" className="text-xs font-bold text-text">
-                    ¿Cuánto tienes ahorrado actualmente? ($ COP):
-                  </label>
-                  <span className="font-mono text-xs font-black text-accent tabular-nums">
-                    {formatCOP(parseFloat(editSavedInput) || 0)}
-                  </span>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted font-bold text-sm">$</span>
-                  <input
-                    id="edit-saved-amount"
-                    type="number"
-                    min="0"
-                    step="1000"
-                    value={editSavedInput}
-                    onChange={(e) => setEditSavedInput(e.target.value)}
-                    required
-                    placeholder="Ej. 1200000"
-                    className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm font-mono font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  />
-                </div>
-
-                {/* Quick Delta Chips */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[10px] text-text-muted font-bold mr-1 uppercase">Ajuste rápido:</span>
-                  {[
-                    { label: '+50k', val: 50000 },
-                    { label: '+100k', val: 100000 },
-                    { label: '+200k', val: 200000 },
-                    { label: '+500k', val: 500000 },
-                    { label: '-50k', val: -50000 }
-                  ].map((chip) => (
-                    <button
-                      key={chip.label}
-                      type="button"
-                      onClick={() => {
-                        const currentVal = parseFloat(editSavedInput) || 0;
-                        setEditSavedInput(String(Math.max(0, currentVal + chip.val)));
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-surface-2 hover:bg-surface border border-border text-[11px] font-bold text-text transition-colors min-h-[28px]"
-                    >
-                      {chip.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Field 2: Meta Mensual de Ahorro */}
-              <div className="space-y-2 pt-2 border-t border-border">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="edit-goal-amount" className="text-xs font-bold text-text">
-                    Meta Mensual de Ahorro ($ COP):
-                  </label>
-                  <span className="font-mono text-xs font-black text-success tabular-nums">
-                    {formatCOP(parseFloat(editGoalInput) || 0)}
-                  </span>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted font-bold text-sm">$</span>
-                  <input
-                    id="edit-goal-amount"
-                    type="number"
-                    min="100000"
-                    step="50000"
-                    value={editGoalInput}
-                    onChange={(e) => setEditGoalInput(e.target.value)}
-                    required
-                    placeholder="Ej. 2000000"
-                    className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm font-mono font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  />
-                </div>
-
-                {/* Preset Chips */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[10px] text-text-muted font-bold mr-1 uppercase">Metas sugeridas:</span>
-                  {[
-                    { label: '$1.5M', val: 1500000 },
-                    { label: '$2.0M (Base)', val: 2000000 },
-                    { label: '$2.5M', val: 2500000 },
-                    { label: '$3.0M', val: 3000000 }
-                  ].map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => setEditGoalInput(String(preset.val))}
-                      className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-colors min-h-[28px] ${
-                        parseFloat(editGoalInput) === preset.val
-                          ? 'bg-accent/15 border-accent text-accent'
-                          : 'bg-surface-2 hover:bg-surface border-border text-text'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Real-time Progress Preview */}
-              <div className="p-3.5 rounded-xl bg-surface-2/60 border border-border space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-text-muted">Proyección de Progreso:</span>
-                  <span className="font-mono font-black text-accent tabular-nums">
-                    {Math.min(100, Math.round(((parseFloat(editSavedInput) || 0) / (parseFloat(editGoalInput) || 1)) * 100))}%
-                  </span>
-                </div>
-                <div className="w-full h-3 bg-surface-2 rounded-full overflow-hidden border border-border">
-                  <div
-                    className="h-full bg-accent rounded-full transition-all duration-300"
-                    style={{
-                      width: `${Math.min(100, ((parseFloat(editSavedInput) || 0) / (parseFloat(editGoalInput) || 1)) * 100)}%`
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Form Buttons */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
                 <button
                   type="button"
-                  onClick={() => setIsEditGoalsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-surface-2 hover:bg-surface text-text-muted hover:text-text text-xs font-bold transition-colors min-h-[44px]"
+                  onClick={() => setIsActionModalOpen(false)}
+                  aria-label="Cerrar modal"
+                  className="p-2 rounded-xl text-text-muted hover:text-text hover:bg-surface-2 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingGoals}
-                  className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-slate-950 text-xs font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent min-h-[44px] shadow-xs disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  {isSavingGoals ? 'Guardando...' : 'Guardar Cambios'}
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </form>
+
+              {/* Segmented Control Tabs */}
+              <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-surface-2 border border-border">
+                <button
+                  type="button"
+                  onClick={() => setActionTab('saving')}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+                    actionTab === 'saving'
+                      ? 'bg-success text-slate-950 shadow-xs'
+                      : 'text-text-muted hover:text-text hover:bg-surface'
+                  }`}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  + Ahorro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActionTab('expense')}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+                    actionTab === 'expense'
+                      ? 'bg-danger text-white shadow-xs'
+                      : 'text-text-muted hover:text-text hover:bg-surface'
+                  }`}
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                  - Gasto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditSavedInput(String(currentSaved));
+                    setEditGoalInput(String(goalCOP));
+                    setActionTab('goals');
+                  }}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+                    actionTab === 'goals'
+                      ? 'bg-accent text-slate-950 shadow-xs'
+                      : 'text-text-muted hover:text-text hover:bg-surface'
+                  }`}
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  Meta / Saldo
+                </button>
+              </div>
+            </div>
+
+            {/* TAB 1: INGRESAR AHORRO */}
+            {actionTab === 'saving' && (
+              <form onSubmit={handleDirectAddSaving} className="p-5 sm:p-6 space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="saving-amount-input" className="text-xs font-bold text-text">
+                      ¿Cuánto dinero vas a ingresar para ahorrar? ($ COP):
+                    </label>
+                    <span className="font-mono text-xs font-black text-success tabular-nums">
+                      {formatCOP(parseFloat(saveAmountInput) || 0)}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted font-bold text-sm">$</span>
+                    <input
+                      id="saving-amount-input"
+                      type="number"
+                      min="1000"
+                      step="1000"
+                      value={saveAmountInput}
+                      onChange={(e) => setSaveAmountInput(e.target.value)}
+                      required
+                      placeholder="Ej. 100000"
+                      className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm font-mono font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success"
+                    />
+                  </div>
+
+                  {/* Quick increment chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                    <span className="text-[10px] text-text-muted font-bold mr-1 uppercase">Incrementar:</span>
+                    {[
+                      { label: '+20k', val: 20000 },
+                      { label: '+50k', val: 50000 },
+                      { label: '+100k', val: 100000 },
+                      { label: '+200k', val: 200000 },
+                      { label: '+500k', val: 500000 }
+                    ].map((chip) => (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => {
+                          const currentVal = parseFloat(saveAmountInput) || 0;
+                          setSaveAmountInput(String(currentVal + chip.val));
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-surface-2 hover:bg-surface border border-border text-[11px] font-bold text-success hover:border-success/40 transition-colors min-h-[28px]"
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="saving-title-input" className="text-xs font-bold text-text block mb-1.5">
+                    Concepto o Motivo del ahorro:
+                  </label>
+                  <input
+                    id="saving-title-input"
+                    type="text"
+                    value={saveTitleInput}
+                    onChange={(e) => setSaveTitleInput(e.target.value)}
+                    placeholder="Ej. Ahorro de la semana, pago arbitraje..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success"
+                  />
+                  {/* Preset concepts */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                    {[
+                      'Ahorro semanal',
+                      'Pago arbitraje COARC',
+                      'Sesión Outlier extra',
+                      'Sobrante quincena',
+                      'Propina / Bono'
+                    ].map((concept) => (
+                      <button
+                        key={concept}
+                        type="button"
+                        onClick={() => setSaveTitleInput(concept)}
+                        className="px-2 py-0.5 rounded-md bg-surface-2 hover:bg-surface border border-border text-[10px] font-semibold text-text-muted hover:text-text transition-colors"
+                      >
+                        {concept}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="saving-category-select" className="text-xs font-bold text-text block mb-1.5">
+                    Categoría de Origen:
+                  </label>
+                  <select
+                    id="saving-category-select"
+                    value={saveCategoryInput}
+                    onChange={(e) => setSaveCategoryInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success"
+                  >
+                    <option value="ahorro">Ahorro General</option>
+                    <option value="arbitraje">Arbitraje COARC</option>
+                    <option value="outlier">Trabajo en Outlier</option>
+                    <option value="extra">Ingreso Extra / Freelance</option>
+                  </select>
+                </div>
+
+                {/* Real-time Savings Projection */}
+                <div className="p-3.5 rounded-xl bg-success-subtle border border-success/30 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-text-muted">Nuevo Saldo Proyectado:</span>
+                    <span className="font-mono font-black text-success tabular-nums">
+                      {formatCOP(currentSaved + (parseFloat(saveAmountInput) || 0))}
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 bg-surface-2 rounded-full overflow-hidden border border-border">
+                    <div
+                      className="h-full bg-success rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.min(100, ((currentSaved + (parseFloat(saveAmountInput) || 0)) / goalCOP) * 100)}%`
+                      }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-text-muted text-right font-mono">
+                    {Math.min(100, Math.round(((currentSaved + (parseFloat(saveAmountInput) || 0)) / goalCOP) * 100))}% de tu meta de {formatCOP(goalCOP)}
+                  </p>
+                </div>
+
+                {/* Submit button */}
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setIsActionModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl bg-surface-2 hover:bg-surface text-text-muted hover:text-text text-xs font-bold transition-colors min-h-[44px]"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingSaving}
+                    className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-success hover:opacity-90 text-slate-950 text-xs font-black transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success min-h-[44px] shadow-xs disabled:opacity-50"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {isSubmittingSaving ? 'Guardando...' : 'Guardar Ahorro'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 2: REGISTRAR GASTO */}
+            {actionTab === 'expense' && (
+              <form onSubmit={handleDirectAddExpense} className="p-5 sm:p-6 space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="expense-direct-amount" className="text-xs font-bold text-text">
+                      ¿Cuánto gastaste? ($ COP):
+                    </label>
+                    <span className="font-mono text-xs font-black text-danger tabular-nums">
+                      {formatCOP(parseFloat(expenseDirectAmount) || 0)}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted font-bold text-sm">$</span>
+                    <input
+                      id="expense-direct-amount"
+                      type="number"
+                      min="1000"
+                      step="1000"
+                      value={expenseDirectAmount}
+                      onChange={(e) => setExpenseDirectAmount(e.target.value)}
+                      required
+                      placeholder="Ej. 45000"
+                      className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm font-mono font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+                    />
+                  </div>
+
+                  {/* Cost in Outlier hours alert */}
+                  {parseFloat(expenseDirectAmount) > 0 && (
+                    <p className="text-[11px] text-warning font-bold mt-1.5 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      Te costó trabajar <span className="font-mono font-black text-warning">{(parseFloat(expenseDirectAmount) / (ratePerHour * COP_RATE)).toFixed(1)} horas</span> en Outlier
+                    </p>
+                  )}
+
+                  {/* Quick preset buttons */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                    <span className="text-[10px] text-text-muted font-bold mr-1 uppercase">Montos frecuentes:</span>
+                    {[
+                      { label: '$15k', val: 15000 },
+                      { label: '$30k', val: 30000 },
+                      { label: '$50k', val: 50000 },
+                      { label: '$100k', val: 100000 },
+                      { label: '$200k', val: 200000 }
+                    ].map((chip) => (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => setExpenseDirectAmount(String(chip.val))}
+                        className="px-2.5 py-1 rounded-lg bg-surface-2 hover:bg-surface border border-border text-[11px] font-bold text-danger hover:border-danger/40 transition-colors min-h-[28px]"
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="expense-direct-title" className="text-xs font-bold text-text block mb-1.5">
+                    ¿En qué gastaste? (Concepto):
+                  </label>
+                  <input
+                    id="expense-direct-title"
+                    type="text"
+                    value={expenseDirectTitle}
+                    onChange={(e) => setExpenseDirectTitle(e.target.value)}
+                    placeholder="Ej. Almuerzo en la U, transporte, salida..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+                  />
+                  {/* Preset concepts */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                    {[
+                      'Almuerzo en la U',
+                      'Transporte / Uber',
+                      'Salida con amigos',
+                      'Fotocopias / Tesis',
+                      'Comida rápida'
+                    ].map((concept) => (
+                      <button
+                        key={concept}
+                        type="button"
+                        onClick={() => setExpenseDirectTitle(concept)}
+                        className="px-2 py-0.5 rounded-md bg-surface-2 hover:bg-surface border border-border text-[10px] font-semibold text-text-muted hover:text-text transition-colors"
+                      >
+                        {concept}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="expense-direct-category" className="text-xs font-bold text-text block mb-1.5">
+                    Categoría de Gasto:
+                  </label>
+                  <select
+                    id="expense-direct-category"
+                    value={expenseDirectCategory}
+                    onChange={(e) => setExpenseDirectCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+                  >
+                    <option value="food">Comida fuera de casa</option>
+                    <option value="impulse">Antojo / Gasto Impulsivo</option>
+                    <option value="transport">Transporte / Movilidad</option>
+                    <option value="social">Salida Social / Amigos</option>
+                    <option value="study">Universidad / Tesis / Libros</option>
+                    <option value="essential">Gasto Fijo / Indispensable</option>
+                  </select>
+                </div>
+
+                {/* Real-time Expense Impact */}
+                <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/30 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-text-muted">Saldo Restante Tras el Gasto:</span>
+                    <span className="font-mono font-black text-danger tabular-nums">
+                      {formatCOP(Math.max(0, currentSaved - (parseFloat(expenseDirectAmount) || 0)))}
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 bg-surface-2 rounded-full overflow-hidden border border-border">
+                    <div
+                      className="h-full bg-accent rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.min(100, (Math.max(0, currentSaved - (parseFloat(expenseDirectAmount) || 0)) / goalCOP) * 100)}%`
+                      }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-text-muted text-right font-mono">
+                    {Math.min(100, Math.round((Math.max(0, currentSaved - (parseFloat(expenseDirectAmount) || 0)) / goalCOP) * 100))}% de tu meta
+                  </p>
+                </div>
+
+                {/* Submit button */}
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setIsActionModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl bg-surface-2 hover:bg-surface text-text-muted hover:text-text text-xs font-bold transition-colors min-h-[44px]"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingExpense}
+                    className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-danger hover:bg-danger/90 text-white text-xs font-black transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger min-h-[44px] shadow-xs disabled:opacity-50"
+                  >
+                    <Minus className="w-4 h-4" />
+                    {isSubmittingExpense ? 'Registrando...' : 'Registrar Gasto'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 3: MODIFICAR SALDO Y META */}
+            {actionTab === 'goals' && (
+              <form onSubmit={handleSaveGoals} className="p-5 sm:p-6 space-y-5">
+                {/* Field 1: Saldo Ahorrado Actual */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="edit-saved-amount" className="text-xs font-bold text-text">
+                      ¿Cuánto tienes ahorrado actualmente? ($ COP):
+                    </label>
+                    <span className="font-mono text-xs font-black text-accent tabular-nums">
+                      {formatCOP(parseFloat(editSavedInput) || 0)}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted font-bold text-sm">$</span>
+                    <input
+                      id="edit-saved-amount"
+                      type="number"
+                      min="0"
+                      step="1000"
+                      value={editSavedInput}
+                      onChange={(e) => setEditSavedInput(e.target.value)}
+                      required
+                      placeholder="Ej. 1200000"
+                      className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm font-mono font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    />
+                  </div>
+
+                  {/* Quick Delta Chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] text-text-muted font-bold mr-1 uppercase">Ajuste rápido:</span>
+                    {[
+                      { label: '+50k', val: 50000 },
+                      { label: '+100k', val: 100000 },
+                      { label: '+200k', val: 200000 },
+                      { label: '+500k', val: 500000 },
+                      { label: '-50k', val: -50000 }
+                    ].map((chip) => (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => {
+                          const currentVal = parseFloat(editSavedInput) || 0;
+                          setEditSavedInput(String(Math.max(0, currentVal + chip.val)));
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-surface-2 hover:bg-surface border border-border text-[11px] font-bold text-text transition-colors min-h-[28px]"
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Field 2: Meta Mensual de Ahorro */}
+                <div className="space-y-2 pt-2 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="edit-goal-amount" className="text-xs font-bold text-text">
+                      Meta Mensual de Ahorro ($ COP):
+                    </label>
+                    <span className="font-mono text-xs font-black text-success tabular-nums">
+                      {formatCOP(parseFloat(editGoalInput) || 0)}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted font-bold text-sm">$</span>
+                    <input
+                      id="edit-goal-amount"
+                      type="number"
+                      min="100000"
+                      step="50000"
+                      value={editGoalInput}
+                      onChange={(e) => setEditGoalInput(e.target.value)}
+                      required
+                      placeholder="Ej. 2000000"
+                      className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm font-mono font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    />
+                  </div>
+
+                  {/* Preset Chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] text-text-muted font-bold mr-1 uppercase">Metas sugeridas:</span>
+                    {[
+                      { label: '$1.5M', val: 1500000 },
+                      { label: '$2.0M (Base)', val: 2000000 },
+                      { label: '$2.5M', val: 2500000 },
+                      { label: '$3.0M', val: 3000000 }
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setEditGoalInput(String(preset.val))}
+                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-colors min-h-[28px] ${
+                          parseFloat(editGoalInput) === preset.val
+                            ? 'bg-accent/15 border-accent text-accent'
+                            : 'bg-surface-2 hover:bg-surface border-border text-text'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Real-time Progress Preview */}
+                <div className="p-3.5 rounded-xl bg-surface-2/60 border border-border space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-text-muted">Proyección de Progreso:</span>
+                    <span className="font-mono font-black text-accent tabular-nums">
+                      {Math.min(100, Math.round(((parseFloat(editSavedInput) || 0) / (parseFloat(editGoalInput) || 1)) * 100))}%
+                    </span>
+                  </div>
+                  <div className="w-full h-3 bg-surface-2 rounded-full overflow-hidden border border-border">
+                    <div
+                      className="h-full bg-accent rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.min(100, ((parseFloat(editSavedInput) || 0) / (parseFloat(editGoalInput) || 1)) * 100)}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Form Buttons */}
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setIsActionModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl bg-surface-2 hover:bg-surface text-text-muted hover:text-text text-xs font-bold transition-colors min-h-[44px]"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingGoals}
+                    className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-slate-950 text-xs font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent min-h-[44px] shadow-xs disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSavingGoals ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

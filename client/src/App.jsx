@@ -434,8 +434,30 @@ function AppContent({ activeTab, setActiveTab }) {
         const dataFinance = await resFinance.json();
         if (dataFinance.success) setFinanceOverview(dataFinance);
       }
+      return data;
     } catch (e) {
       console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const handleAddExpense = async (expenseData) => {
+    try {
+      const res = await fetch('/api/finance/expense', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(expenseData)
+      });
+      const data = await res.json();
+      if (data.success) {
+        const resFinance = await fetch('/api/finance/overview');
+        const dataFinance = await resFinance.json();
+        if (dataFinance.success) setFinanceOverview(dataFinance);
+      }
+      return data;
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
     }
   };
 
@@ -466,7 +488,7 @@ function AppContent({ activeTab, setActiveTab }) {
   };
 
   const handleDeleteSaving = async (savingId) => {
-    const deletedSaving = financeOverview?.savingsRecords?.find((s) => s.id === savingId);
+    const deletedRecord = financeOverview?.savingsRecords?.find((s) => s.id === savingId);
     try {
       const res = await fetch(`/api/finance/saving/${savingId}`, { method: 'DELETE' });
       const data = await res.json();
@@ -475,23 +497,40 @@ function AppContent({ activeTab, setActiveTab }) {
         const dataFinance = await resFinance.json();
         if (dataFinance.success) setFinanceOverview(dataFinance);
 
-        if (deletedSaving) {
+        if (deletedRecord) {
+          const isExp = deletedRecord.type === 'expense';
           toast.undo({
-            title: 'Victoria de ahorro eliminada',
-            message: `"${deletedSaving.title}" fue retirada de tus registros.`,
+            title: isExp ? 'Gasto eliminado' : 'Ahorro eliminado',
+            message: `"${deletedRecord.title}" fue retirado de tus registros.`,
             category: 'finance',
             onUndo: async () => {
-              await handleAddSaving({ title: deletedSaving.title, amountCOP: deletedSaving.amountCOP });
-              toast.success({
-                title: 'Ahorro restaurado',
-                message: `Victoria de ${deletedSaving.title} restablecida.`
-              });
+              if (isExp) {
+                await handleAddExpense({
+                  title: deletedRecord.title,
+                  amountCOP: deletedRecord.amountCOP,
+                  category: deletedRecord.category
+                });
+                toast.success({
+                  title: 'Gasto restaurado',
+                  message: `Gasto de ${deletedRecord.title} restablecido.`
+                });
+              } else {
+                await handleAddSaving({
+                  title: deletedRecord.title,
+                  amountCOP: deletedRecord.amountCOP,
+                  category: deletedRecord.category
+                });
+                toast.success({
+                  title: 'Ahorro restaurado',
+                  message: `Ahorro de ${deletedRecord.title} restablecido.`
+                });
+              }
             }
           });
         } else {
           toast.info({
             title: 'Registro retirado',
-            message: 'Se eliminó la victoria de ahorro seleccionada.'
+            message: 'Se eliminó el movimiento seleccionado.'
           });
         }
       }
@@ -645,6 +684,7 @@ function AppContent({ activeTab, setActiveTab }) {
                     financeOverview={financeOverview}
                     onEvaluateExpense={handleEvaluateExpense}
                     onAddSaving={handleAddSaving}
+                    onAddExpense={handleAddExpense}
                     onUpdateGoals={handleUpdateFinanceGoals}
                     onDeleteSaving={handleDeleteSaving}
                     addToast={addToast}
