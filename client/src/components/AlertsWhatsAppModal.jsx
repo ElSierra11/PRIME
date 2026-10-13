@@ -270,25 +270,37 @@ export default function AlertsWhatsAppModal({
                 </span>
                 <ol className="text-text-muted text-[11px] space-y-1.5 list-decimal list-inside">
                   <li>
-                    Añade a tus contactos de WhatsApp el número: <strong className="text-text">+34 644 44 87 34</strong> o dale clic al botón abajo.
+                    Añade a tus contactos el número activo oficial de CallMeBot: <strong className="text-text">+34 623 78 64 49</strong> (o el de respaldo <strong className="text-text">+34 644 76 66 43</strong>).
                   </li>
                   <li>
                     Envíale el mensaje: <code className="bg-surface px-1.5 py-0.5 rounded text-accent font-mono">I allow callmebot to send me messages</code>
                   </li>
                   <li>
-                    El bot te responderá con tu <strong className="text-text">API Key personal</strong>. Cópialo y pégalo en la casilla de abajo.
+                    El bot te responderá de inmediato con tu <strong className="text-text">API Key personal</strong>. Cópialo y pégalo en la casilla de abajo.
                   </li>
                 </ol>
-                <a
-                  href="https://api.whatsapp.com/send?phone=34644448734&text=I%20allow%20callmebot%20to%20send%20me%20messages"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-colors mt-1"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  Abrir chat de WhatsApp para pedir API Key
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  <a
+                    href="https://api.whatsapp.com/send?phone=34623786449&text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Abrir Chat Activo (+34 623 78 64 49)
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                  <a
+                    href="https://api.whatsapp.com/send?phone=34644766643&text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-2 hover:bg-surface text-text-muted hover:text-text border border-border text-xs font-semibold transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Chat de Respaldo (+34 644 76 66 43)
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
               </div>
 
               {/* Form Settings */}
