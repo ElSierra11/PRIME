@@ -4,6 +4,14 @@
   "exchangeRateCOPPerUSD": 4000,
   "savingsRecords": [
     {
+      "id": "inc-1791907719661",
+      "title": "Pago Turno Outlier Semanal",
+      "amountCOP": 180000,
+      "type": "income",
+      "category": "outlier",
+      "date": "Hoy"
+    },
+    {
       "id": "sav-1790988249384",
       "title": "Ahorrado en vez de gastar en: Hamburguesa especial",
       "amountCOP": 55000,

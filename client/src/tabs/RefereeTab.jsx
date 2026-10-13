@@ -25,13 +25,15 @@ import {
   CheckCheck,
   Clock,
   ArrowRight,
-  Layers
+  Layers,
+  Scale
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { haptics } from '../utils/haptics';
 import { useToast } from '../context/ToastContext';
 import { IFAB_LAWS_DATA } from '../data/rulesData';
 import { rulesApi } from '../services/rulesApi';
+import RefereeAIConsultant from '../components/RefereeAIConsultant';
 
 // ─── BANCO DE CASOS PRÁCTICOS & SIMULADOR DE JUICIO ARBITRAL ────────────
 const REFEREE_CASES = [
@@ -504,6 +506,18 @@ export default function RefereeTab({ addToast: addToastProp } = {}) {
           >
             <Zap className="w-4 h-4" />
             Flashcards Pre-Partido
+          </button>
+
+          <button
+            onClick={() => setActiveSection('ai-consultant')}
+            className={`min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              activeSection === 'ai-consultant'
+                ? 'bg-accent text-slate-950 font-black shadow-xs'
+                : 'bg-surface-2 text-text-muted hover:text-text hover:bg-surface border border-border'
+            }`}
+          >
+            <Scale className="w-4 h-4" />
+            Consultor IA de Jugadas
           </button>
         </div>
       </section>
@@ -1230,8 +1244,9 @@ export default function RefereeTab({ addToast: addToastProp } = {}) {
 
             {isFlipped ? (
               <div className="space-y-3 max-w-md">
-                <div className="text-base sm:text-lg font-black text-emerald-400 leading-snug">
-                  ✔ {REFEREE_CASES[flashcardIndex].options.find(o => o.isCorrect)?.text}
+                <div className="text-base sm:text-lg font-black text-emerald-400 leading-snug flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 shrink-0" />
+                  <span>{REFEREE_CASES[flashcardIndex].options.find(o => o.isCorrect)?.text}</span>
                 </div>
                 <div className="text-xs text-text-muted bg-surface-2/80 p-3 rounded-xl border border-border leading-relaxed text-left">
                   <span className="font-bold text-accent block text-[11px] mb-1">Fundamentación IFAB:</span>
@@ -1246,8 +1261,9 @@ export default function RefereeTab({ addToast: addToastProp } = {}) {
                 <p className="text-xs sm:text-sm text-text-muted leading-relaxed">
                   {REFEREE_CASES[flashcardIndex].situation}
                 </p>
-                <p className="text-xs sm:text-sm font-bold text-accent pt-1">
-                  ❓ {REFEREE_CASES[flashcardIndex].question}
+                <p className="text-xs sm:text-sm font-bold text-accent pt-1 flex items-center gap-1.5 justify-center">
+                  <HelpCircle className="w-4 h-4 text-accent" />
+                  <span>{REFEREE_CASES[flashcardIndex].question}</span>
                 </p>
               </div>
             )}
@@ -1288,6 +1304,11 @@ export default function RefereeTab({ addToast: addToastProp } = {}) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ─── SECTION 5: CONSULTOR ARBITRAL IA ───────────────────────── */}
+      {activeSection === 'ai-consultant' && (
+        <RefereeAIConsultant />
       )}
     </div>
   );

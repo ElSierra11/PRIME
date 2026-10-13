@@ -76,11 +76,32 @@ class FinanceService {
       }
     }
 
+    let totalIncomeCOP = 0;
+    let totalExpenseCOP = 0;
+    if (Array.isArray(this.state.savingsRecords)) {
+      this.state.savingsRecords.forEach(r => {
+        const amt = parseFloat(r.amountCOP || 0);
+        if (r.type === 'income') {
+          totalIncomeCOP += amt;
+        } else if (r.type === 'expense') {
+          totalExpenseCOP += amt;
+        } else if (r.type === 'saving') {
+          if (r.category === 'arbitraje' || r.category === 'outlier' || r.category === 'extra') {
+            totalIncomeCOP += amt;
+          }
+        }
+      });
+    }
+    const netBalanceCOP = totalIncomeCOP - totalExpenseCOP;
+
     const percent = Math.min(100, Math.round((this.state.currentSavedCOP / this.state.monthlyGoalCOP) * 100));
     return {
       success: true,
       monthlyGoalCOP: this.state.monthlyGoalCOP,
       currentSavedCOP: this.state.currentSavedCOP,
+      totalIncomeCOP,
+      totalExpenseCOP,
+      netBalanceCOP,
       progressPercent: percent,
       savingsRecords: this.state.savingsRecords,
       outlierHourlyCOP: ratePerHourUSD * this.state.exchangeRateCOPPerUSD
@@ -123,18 +144,23 @@ class FinanceService {
     }
 
     const isExpense = type === 'expense';
+    const isIncome = type === 'income';
     if (isExpense) {
       this.state.currentSavedCOP = Math.max(0, this.state.currentSavedCOP - numericAmount);
-    } else {
+    } else if (type === 'saving') {
       this.state.currentSavedCOP += numericAmount;
     }
 
+    const prefix = isExpense ? 'exp-' : (isIncome ? 'inc-' : 'sav-');
+    const defaultTitle = isExpense ? 'Gasto registrado' : (isIncome ? 'Ingreso registrado' : 'Ahorro ingresado');
+    const defaultCat = isExpense ? 'gasto' : (isIncome ? 'ingreso' : 'ahorro');
+
     const record = {
-      id: (isExpense ? 'exp-' : 'sav-') + Date.now(),
-      title: title || (isExpense ? 'Gasto registrado' : 'Ahorro ingresado'),
+      id: prefix + Date.now(),
+      title: title || defaultTitle,
       amountCOP: numericAmount,
-      type: isExpense ? 'expense' : 'saving',
-      category: category || (isExpense ? 'gasto' : 'ahorro'),
+      type: type,
+      category: category || defaultCat,
       date: 'Hoy'
     };
     this.state.savingsRecords.unshift(record);
@@ -161,6 +187,10 @@ class FinanceService {
 
   async addExpense({ title, amountCOP, category = 'gasto' }) {
     return this.addSaving({ title, amountCOP, category, type: 'expense' });
+  }
+
+  async addIncome({ title, amountCOP, category = 'ingreso' }) {
+    return this.addSaving({ title, amountCOP, category, type: 'income' });
   }
 
   async updateGoals({ currentSavedCOP, monthlyGoalCOP, exchangeRateCOPPerUSD }) {
@@ -197,9 +227,9 @@ class FinanceService {
     const target = this.state.savingsRecords.find(r => r.id === id);
     if (target) {
       if (target.type === 'expense') {
-        // Revertir gasto: vuelve a sumar al saldo ahorrado
+        // Revertir gasto: vuelve a sumar al saldo ahorrado si correspondia
         this.state.currentSavedCOP += target.amountCOP;
-      } else {
+      } else if (target.type === 'saving') {
         // Revertir ahorro: resta del saldo ahorrado
         this.state.currentSavedCOP = Math.max(0, this.state.currentSavedCOP - target.amountCOP);
       }

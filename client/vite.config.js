@@ -64,6 +64,7 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
+        importScripts: ['/sw-push.js'],
         // Estrategia: stale-while-revalidate para el shell de la app.
         // Sirve desde caché inmediatamente y actualiza en background.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],

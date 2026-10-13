@@ -19,6 +19,8 @@ const whatsappService = require('./services/notifications/whatsapp');
 const reminderScheduler = require('./services/notifications/scheduler');
 const refereeService = require('./services/referee/service');
 const rulesService = require('./services/rules/service');
+const refereeAIService = require('./services/referee/aiService');
+const financeAIService = require('./services/finance/aiService');
 
 const PORT = process.env.PORT || 5000;
 const CLIENT_DIST = path.join(__dirname, '..', 'client', 'dist');
@@ -72,17 +74,29 @@ function serveStatic(req, res, pathname) {
 
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-  const isHtmlOrSw = filePath.endsWith('index.html') || filePath.endsWith('sw.js') || filePath.endsWith('manifest.webmanifest');
+  const isHtmlOrSw = filePath.endsWith('index.html') || filePath.endsWith('sw.js') || filePath.endsWith('sw-push.js') || filePath.endsWith('manifest.webmanifest');
   const cacheControl = isHtmlOrSw ? 'no-cache, no-store, must-revalidate' : 'public, max-age=31536000, immutable';
 
   fs.readFile(filePath, (err, content) => {
     if (err) {
+      // Fallback a public/ si el archivo existe allí (ej. sw-push.js)
+      const publicPath = path.join(__dirname, '..', 'client', 'public', pathname.replace(/^\//, ''));
+      if (fs.existsSync(publicPath) && !fs.statSync(publicPath).isDirectory()) {
+        const publicExt = path.extname(publicPath).toLowerCase();
+        res.writeHead(200, {
+          'Content-Type': MIME_TYPES[publicExt] || 'application/octet-stream',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          ...(publicExt === '.js' ? { 'Service-Worker-Allowed': '/' } : {})
+        });
+        return fs.createReadStream(publicPath).pipe(res);
+      }
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('Not found');
     } else {
       res.writeHead(200, {
         'Content-Type': contentType,
-        'Cache-Control': cacheControl
+        'Cache-Control': cacheControl,
+        ...(ext === '.js' && isHtmlOrSw ? { 'Service-Worker-Allowed': '/' } : {})
       });
       res.end(content);
     }
@@ -221,12 +235,26 @@ const server = http.createServer(async (req, res) => {
       const result = await financeService.addExpense(body);
       return sendResponse(res, 200, result);
     }
+    if (pathname === '/api/finance/income' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const result = await financeService.addIncome(body);
+      return sendResponse(res, 200, result);
+    }
+    if (pathname === '/api/finance/ai-advisor' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const overview = await financeService.getFinanceOverview();
+      const result = await financeAIService.advise({
+        prompt: body.prompt || body.question,
+        financeContext: { ...overview, ...(body.context || {}) }
+      });
+      return sendResponse(res, 200, result);
+    }
     if (pathname === '/api/finance/update-goals' && req.method === 'POST') {
       const body = await parseJsonBody(req);
       const result = await financeService.updateGoals(body);
       return sendResponse(res, 200, result);
     }
-    if ((pathname.startsWith('/api/finance/saving/') || pathname.startsWith('/api/finance/expense/') || pathname.startsWith('/api/finance/record/')) && req.method === 'DELETE') {
+    if ((pathname.startsWith('/api/finance/saving/') || pathname.startsWith('/api/finance/expense/') || pathname.startsWith('/api/finance/income/') || pathname.startsWith('/api/finance/record/')) && req.method === 'DELETE') {
       const id = pathname.split('/').pop();
       const result = await financeService.deleteSaving(id);
       return sendResponse(res, 200, result);
@@ -289,8 +317,8 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/notifications/push/test' && req.method === 'POST') {
       const body = await parseJsonBody(req);
       const payload = {
-        title: body.title || '⚡ Test Push PRIME OS',
-        body: body.body || 'Notificación push en segundo plano funcionando al 100%.',
+        title: body.title || 'PRIME OS Web Push',
+        body: body.body || 'Notificacion push en segundo plano funcionando con exito.',
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-192.png',
         url: '/?tab=dashboard'
@@ -360,6 +388,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (pathname === '/api/referee/scenarios' && req.method === 'GET') {
       const result = refereeService.getVisualScenarios();
+      return sendResponse(res, 200, result);
+    }
+    if (pathname === '/api/referee/ai-consultant' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const result = await refereeAIService.consult({
+        question: body.question || body.prompt,
+        context: body.context || {}
+      });
       return sendResponse(res, 200, result);
     }
 

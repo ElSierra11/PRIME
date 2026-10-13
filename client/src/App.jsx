@@ -461,6 +461,26 @@ function AppContent({ activeTab, setActiveTab }) {
     }
   };
 
+  const handleAddIncome = async (incomeData) => {
+    try {
+      const res = await fetch('/api/finance/income', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(incomeData)
+      });
+      const data = await res.json();
+      if (data.success) {
+        const resFinance = await fetch('/api/finance/overview');
+        const dataFinance = await resFinance.json();
+        if (dataFinance.success) setFinanceOverview(dataFinance);
+      }
+      return data;
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
   const handleUpdateFinanceGoals = async ({ currentSavedCOP, monthlyGoalCOP }) => {
     try {
       const res = await fetch('/api/finance/update-goals', {
@@ -685,6 +705,7 @@ function AppContent({ activeTab, setActiveTab }) {
                     onEvaluateExpense={handleEvaluateExpense}
                     onAddSaving={handleAddSaving}
                     onAddExpense={handleAddExpense}
+                    onAddIncome={handleAddIncome}
                     onUpdateGoals={handleUpdateFinanceGoals}
                     onDeleteSaving={handleDeleteSaving}
                     addToast={addToast}

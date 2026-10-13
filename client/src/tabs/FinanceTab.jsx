@@ -25,11 +25,13 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Filter,
-  Check
+  Check,
+  Calculator
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import AnimatedNumber from '../components/AnimatedNumber';
 import { useToast } from '../hooks/useToast';
+import FinanceAIAdvisor from '../components/FinanceAIAdvisor';
 
 /* ─── confetti helper ──────────────────────────────────── */
 async function launchConfetti() {
@@ -230,11 +232,13 @@ export default function FinanceTab({
   onEvaluateExpense,
   onAddSaving,
   onAddExpense,
+  onAddIncome,
   onUpdateGoals,
   onDeleteSaving,
   addToast: legacyAddToast
 }) {
   const { toast } = useToast();
+  const [financeSection, setFinanceSection] = useState('cashflow'); // 'cashflow' | 'ai-advisor' | 'evaluator'
   const [expenseName, setExpenseName] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseCategory, setExpenseCategory] = useState('impulse');
@@ -243,9 +247,15 @@ export default function FinanceTab({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [goalReached, setGoalReached] = useState(false);
 
-  /* ─── Unified Action Modal State (Savings / Expenses / Goals) ─── */
+  /* ─── Unified Action Modal State (Savings / Expenses / Goals / Income) ─── */
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
-  const [actionTab, setActionTab] = useState('saving'); // 'saving' | 'expense' | 'goals'
+  const [actionTab, setActionTab] = useState('income'); // 'income' | 'expense' | 'saving' | 'goals'
+
+  // Direct Income State
+  const [incomeDirectAmount, setIncomeDirectAmount] = useState('');
+  const [incomeDirectTitle, setIncomeDirectTitle] = useState('');
+  const [incomeDirectCategory, setIncomeDirectCategory] = useState('outlier');
+  const [isSubmittingIncome, setIsSubmittingIncome] = useState(false);
 
   // Direct Saving State
   const [saveAmountInput, setSaveAmountInput] = useState('');
@@ -277,6 +287,31 @@ export default function FinanceTab({
   const COP_RATE = 4000;
   const records = financeOverview?.savingsRecords || [];
 
+  const totalIncome = useMemo(() => {
+    if (financeOverview?.totalIncomeCOP !== undefined && financeOverview.totalIncomeCOP > 0) {
+      return financeOverview.totalIncomeCOP;
+    }
+    return records
+      .filter((r) => r.type === 'income' || (r.type === 'saving' && (r.category === 'arbitraje' || r.category === 'outlier')))
+      .reduce((s, r) => s + (r.amountCOP || 0), 0);
+  }, [financeOverview, records]);
+
+  const totalExpense = useMemo(() => {
+    if (financeOverview?.totalExpenseCOP !== undefined && financeOverview.totalExpenseCOP > 0) {
+      return financeOverview.totalExpenseCOP;
+    }
+    return records
+      .filter((r) => r.type === 'expense')
+      .reduce((s, r) => s + (r.amountCOP || 0), 0);
+  }, [financeOverview, records]);
+
+  const netBalance = useMemo(() => {
+    if (financeOverview?.netBalanceCOP !== undefined) {
+      return financeOverview.netBalanceCOP;
+    }
+    return totalIncome - totalExpense;
+  }, [financeOverview, totalIncome, totalExpense]);
+
   const handleSaveGoals = async (e) => {
     e.preventDefault();
     const newSaved = parseFloat(editSavedInput);
@@ -297,6 +332,41 @@ export default function FinanceTab({
       setIsActionModalOpen(false);
     } finally {
       setIsSavingGoals(false);
+    }
+  };
+
+  /* ─── Direct Add Income ─── */
+  const handleDirectAddIncome = async (e) => {
+    e?.preventDefault();
+    const amount = parseFloat(incomeDirectAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.warning({ title: 'Monto requerido', message: 'Ingresa un valor de ingreso positivo.' });
+      return;
+    }
+    const title = incomeDirectTitle.trim() || 'Ingreso registrado';
+    setIsSubmittingIncome(true);
+    try {
+      if (onAddIncome) {
+        await onAddIncome({
+          title,
+          amountCOP: amount,
+          category: incomeDirectCategory,
+          type: 'income'
+        });
+      }
+      sounds.playSuccessChime();
+      toast.success({
+        title: 'Ingreso registrado',
+        message: `+${formatCOP(amount)} sumados a tu flujo de caja en vivo.`,
+        category: 'finance'
+      });
+      setIncomeDirectAmount('');
+      setIncomeDirectTitle('');
+      setIsActionModalOpen(false);
+    } catch (err) {
+      toast.error({ title: 'Error', message: 'No se pudo registrar el ingreso.' });
+    } finally {
+      setIsSubmittingIncome(false);
     }
   };
 
@@ -542,14 +612,14 @@ export default function FinanceTab({
               <button
                 type="button"
                 onClick={() => {
-                  setActionTab('saving');
+                  setActionTab('income');
                   setIsActionModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-success/15 hover:bg-success/25 border border-success/40 text-xs font-black text-success transition-all shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
-                title="Ingresar una cantidad de dinero para ahorrar"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-black text-emerald-400 transition-all shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
+                title="Registrar un ingreso de dinero en tiempo real"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Ingresar Ahorro
+                Registrar Ingreso
               </button>
 
               <button
@@ -558,11 +628,24 @@ export default function FinanceTab({
                   setActionTab('expense');
                   setIsActionModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-danger/10 hover:bg-danger/20 border border-danger/30 text-xs font-black text-danger transition-all shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
-                title="Registrar un gasto que hayas realizado"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-black text-rose-400 transition-all shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
+                title="Registrar un gasto y descontarlo en tiempo real"
               >
                 <Minus className="w-3.5 h-3.5" />
                 Registrar Gasto
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActionTab('saving');
+                  setIsActionModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-xs font-black text-sky-400 transition-all shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
+                title="Ingresar monto a la meta de ahorro mensual"
+              >
+                <PiggyBank className="w-3.5 h-3.5" />
+                Ahorro Meta
               </button>
 
               <button
@@ -632,9 +715,119 @@ export default function FinanceTab({
             </div>
           </div>
         </div>
+
+        {/* Real-time Cashflow Metrics Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-border">
+          <div className="p-3.5 rounded-xl bg-surface-2 border border-border space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Total Ingresos</span>
+              <span className="w-6 h-6 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+                <TrendingUp className="w-3.5 h-3.5" />
+              </span>
+            </div>
+            <div className="font-mono text-base sm:text-lg font-black text-emerald-400 tabular-nums">
+              <AnimatedNumber value={totalIncome} format="cop" duration={800} />
+            </div>
+            <span className="text-[10px] text-text-muted block">Outlier y arbitraje</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-surface-2 border border-border space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Total Gastos</span>
+              <span className="w-6 h-6 rounded-lg bg-rose-500/15 text-rose-400 flex items-center justify-center">
+                <TrendingDown className="w-3.5 h-3.5" />
+              </span>
+            </div>
+            <div className="font-mono text-base sm:text-lg font-black text-rose-400 tabular-nums">
+              <AnimatedNumber value={totalExpense} format="cop" duration={800} />
+            </div>
+            <span className="text-[10px] text-text-muted block">Descontados en vivo</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-surface-2 border border-border space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Saldo Neto</span>
+              <span className="w-6 h-6 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center">
+                <DollarSign className="w-3.5 h-3.5" />
+              </span>
+            </div>
+            <div className={`font-mono text-base sm:text-lg font-black tabular-nums ${netBalance >= 0 ? 'text-text' : 'text-rose-400'}`}>
+              <AnimatedNumber value={netBalance} format="cop" duration={800} />
+            </div>
+            <span className="text-[10px] text-text-muted block">Ingresos menos gastos</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-surface-2 border border-border space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Meta Ahorro</span>
+              <span className="w-6 h-6 rounded-lg bg-accent/15 text-accent flex items-center justify-center">
+                <PiggyBank className="w-3.5 h-3.5" />
+              </span>
+            </div>
+            <div className="font-mono text-base sm:text-lg font-black text-accent tabular-nums">
+              <AnimatedNumber value={currentSaved} format="cop" duration={800} />
+            </div>
+            <span className="text-[10px] text-text-muted block">{percent}% de {formatCOP(goalCOP)}</span>
+          </div>
+        </div>
+
+        {/* Finance Sub-Section Selector */}
+        <div className="flex items-center gap-2 overflow-x-auto pt-3 border-t border-border no-scrollbar">
+          <button
+            type="button"
+            onClick={() => setFinanceSection('cashflow')}
+            className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+              financeSection === 'cashflow'
+                ? 'bg-accent text-slate-950 font-black shadow-xs'
+                : 'bg-surface-2 text-text-muted hover:text-text hover:bg-surface border border-border'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4" />
+            Flujo de Caja y Movimientos
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFinanceSection('ai-advisor')}
+            className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+              financeSection === 'ai-advisor'
+                ? 'bg-accent text-slate-950 font-black shadow-xs'
+                : 'bg-surface-2 text-text-muted hover:text-text hover:bg-surface border border-border'
+            }`}
+          >
+            <Calculator className="w-4 h-4" />
+            Asesor Financiero IA
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFinanceSection('evaluator')}
+            className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+              financeSection === 'evaluator'
+                ? 'bg-accent text-slate-950 font-black shadow-xs'
+                : 'bg-surface-2 text-text-muted hover:text-text hover:bg-surface border border-border'
+            }`}
+          >
+            <HelpCircle className="w-4 h-4" />
+            Auditor de Costo de Oportunidad
+          </button>
+        </div>
       </section>
 
-      {/* ── Main Grid ─────────────────────────────────────── */}
+      {/* ── SECTION: AI FINANCIAL ADVISOR ──────────────────────── */}
+      {financeSection === 'ai-advisor' && (
+        <FinanceAIAdvisor
+          financeOverview={{
+            ...financeOverview,
+            totalIncomeCOP: totalIncome,
+            totalExpenseCOP: totalExpense,
+            netBalanceCOP: netBalance
+          }}
+        />
+      )}
+
+      {/* ── Main Grid (Cashflow & Evaluator) ─────────────────── */}
+      {financeSection !== 'ai-advisor' && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* ── Expense Auditor ────────────────────────────── */}
@@ -997,6 +1190,7 @@ export default function FinanceTab({
           </section>
         </div>
       </div>
+      )}
 
       {/* ── Drawer: All Victories ───────────────────────── */}
       <AnimatePresence>
@@ -1197,23 +1391,28 @@ export default function FinanceTab({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
-                    actionTab === 'saving'
+                    actionTab === 'income'
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                      : actionTab === 'saving'
                       ? 'bg-success/15 border-success/30 text-success'
                       : actionTab === 'expense'
                       ? 'bg-danger/15 border-danger/30 text-danger'
                       : 'bg-accent/15 border-accent/30 text-accent'
                   }`}>
+                    {actionTab === 'income' && <TrendingUp className="w-5 h-5" />}
                     {actionTab === 'saving' && <PiggyBank className="w-5 h-5" />}
                     {actionTab === 'expense' && <TrendingDown className="w-5 h-5" />}
                     {actionTab === 'goals' && <Edit3 className="w-5 h-5" />}
                   </div>
                   <div>
                     <h3 id="action-modal-title" className="text-base font-extrabold text-text">
+                      {actionTab === 'income' && 'Registrar Nuevo Ingreso'}
                       {actionTab === 'saving' && 'Ingresar Nuevo Ahorro'}
                       {actionTab === 'expense' && 'Registrar Gasto Realizado'}
                       {actionTab === 'goals' && 'Modificar Saldo Ahorrado & Meta'}
                     </h3>
                     <p className="text-xs text-text-muted">
+                      {actionTab === 'income' && 'Suma dinero a tu flujo de caja disponible de Outlier, arbitraje u otras fuentes.'}
                       {actionTab === 'saving' && 'Suma dinero a tu meta mensual y mantén tu progreso al día.'}
                       {actionTab === 'expense' && 'Resta gastos efectuados y vigila su costo en horas de Outlier.'}
                       {actionTab === 'goals' && 'Actualiza tu balance real acumulado y meta mensual.'}
@@ -1231,23 +1430,23 @@ export default function FinanceTab({
               </div>
 
               {/* Segmented Control Tabs */}
-              <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-surface-2 border border-border">
+              <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-surface-2 border border-border">
                 <button
                   type="button"
-                  onClick={() => setActionTab('saving')}
-                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
-                    actionTab === 'saving'
-                      ? 'bg-success text-slate-950 shadow-xs'
+                  onClick={() => setActionTab('income')}
+                  className={`flex items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-bold transition-all ${
+                    actionTab === 'income'
+                      ? 'bg-emerald-500 text-slate-950 shadow-xs'
                       : 'text-text-muted hover:text-text hover:bg-surface'
                   }`}
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  + Ahorro
+                  + Ingreso
                 </button>
                 <button
                   type="button"
                   onClick={() => setActionTab('expense')}
-                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+                  className={`flex items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-bold transition-all ${
                     actionTab === 'expense'
                       ? 'bg-danger text-white shadow-xs'
                       : 'text-text-muted hover:text-text hover:bg-surface'
@@ -1258,22 +1457,155 @@ export default function FinanceTab({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setActionTab('saving')}
+                  className={`flex items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-bold transition-all ${
+                    actionTab === 'saving'
+                      ? 'bg-success text-slate-950 shadow-xs'
+                      : 'text-text-muted hover:text-text hover:bg-surface'
+                  }`}
+                >
+                  <PiggyBank className="w-3.5 h-3.5" />
+                  Ahorro
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     setEditSavedInput(String(currentSaved));
                     setEditGoalInput(String(goalCOP));
                     setActionTab('goals');
                   }}
-                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+                  className={`flex items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-bold transition-all ${
                     actionTab === 'goals'
                       ? 'bg-accent text-slate-950 shadow-xs'
                       : 'text-text-muted hover:text-text hover:bg-surface'
                   }`}
                 >
                   <Edit3 className="w-3.5 h-3.5" />
-                  Meta / Saldo
+                  Meta
                 </button>
               </div>
             </div>
+
+            {/* TAB: REGISTRAR INGRESO */}
+            {actionTab === 'income' && (
+              <form onSubmit={handleDirectAddIncome} className="p-5 sm:p-6 space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="income-amount-input" className="text-xs font-bold text-text">
+                      ¿Cuánto dinero vas a ingresar? ($ COP):
+                    </label>
+                    <span className="font-mono text-xs font-black text-emerald-400 tabular-nums">
+                      {formatCOP(parseFloat(incomeDirectAmount) || 0)}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted font-bold text-sm">$</span>
+                    <input
+                      id="income-amount-input"
+                      type="number"
+                      min="1000"
+                      step="1000"
+                      value={incomeDirectAmount}
+                      onChange={(e) => setIncomeDirectAmount(e.target.value)}
+                      required
+                      placeholder="Ej. 180000"
+                      className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm font-mono font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                    />
+                  </div>
+
+                  {/* Chips de monto rápido */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                    <span className="text-[10px] text-text-muted font-bold mr-1 uppercase">Incrementar:</span>
+                    {[
+                      { label: '+50k', val: 50000 },
+                      { label: '+100k', val: 100000 },
+                      { label: '+200k', val: 200000 },
+                      { label: '+500k', val: 500000 }
+                    ].map((chip) => (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => {
+                          const currentVal = parseFloat(incomeDirectAmount) || 0;
+                          setIncomeDirectAmount(String(currentVal + chip.val));
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-surface-2 hover:bg-surface border border-border text-[11px] font-bold text-emerald-400 hover:border-emerald-500/40 transition-colors min-h-[28px]"
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="income-title-input" className="text-xs font-bold text-text block mb-1.5">
+                    Concepto o Fuente del Ingreso:
+                  </label>
+                  <input
+                    id="income-title-input"
+                    type="text"
+                    value={incomeDirectTitle}
+                    onChange={(e) => setIncomeDirectTitle(e.target.value)}
+                    placeholder="Ej. Pago semanal Outlier, Partido arbitraje..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-surface-2 border border-border text-text text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  />
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                    {[
+                      'Pago semanal Outlier AI',
+                      'Partido Central COARC',
+                      'Asistente Arbitral COARC',
+                      'Freelance / Universidad',
+                      'Ingreso extraordinario'
+                    ].map((concept) => (
+                      <button
+                        key={concept}
+                        type="button"
+                        onClick={() => setIncomeDirectTitle(concept)}
+                        className="text-[10px] px-2 py-0.5 rounded-md bg-surface-2 hover:bg-surface text-text-muted hover:text-text border border-border transition-colors"
+                      >
+                        {concept}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-text block mb-1.5">Categoría:</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {[
+                      { id: 'outlier', label: 'Outlier AI' },
+                      { id: 'arbitraje', label: 'Arbitraje COARC' },
+                      { id: 'study', label: 'Universidad / Tesis' },
+                      { id: 'extra', label: 'Ingreso Extra' }
+                    ].map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setIncomeDirectCategory(cat.id)}
+                        className={`py-2 px-2.5 rounded-xl border text-xs font-bold transition-all ${
+                          incomeDirectCategory === cat.id
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                            : 'bg-surface-2 border-border text-text-muted hover:text-text'
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSubmittingIncome}
+                    className="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {isSubmittingIncome ? 'Registrando ingreso...' : 'Sumar a Flujo de Caja'}
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* TAB 1: INGRESAR AHORRO */}
             {actionTab === 'saving' && (
